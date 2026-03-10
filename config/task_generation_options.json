@@ -1,0 +1,28 @@
+{
+  "target_date": "2026-03-11",
+  "video_filter": {
+    "allowed_status": ["待发布"],
+    "popular_filter": "all"
+  },
+  "title_filter": {
+    "allowed_status": ["可用"],
+    "mode": "high_score",
+    "score_threshold": 80
+  },
+  "platform_plan": [
+    {
+      "platform": "douyin",
+      "account_name": "抖音主号",
+      "mark_original": "是"
+    },
+    {
+      "platform": "shipinhao",
+      "account_name": "视频号主号",
+      "mark_original": "是"
+    }
+  ],
+  "write_back": {
+    "update_title_use_count": true,
+    "update_video_status": true
+  }
+}

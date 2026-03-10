@@ -1,0 +1,8 @@
+.build
+dist
+.swiftpm
+.DS_Store
+data/~$*.xlsx
+output/~$*.xlsx
+data/content_db.xlsx
+output/tasks_2026-03-10.xlsx

@@ -1,0 +1,103 @@
+VIDEO_SHEET = "视频库"
+TAG_SHEET = "标签库"
+TITLE_SHEET = "标题库"
+TASK_SHEET = "任务单"
+SUMMARY_SHEET = "汇总"
+
+VIDEO_FILE_NAME = "视频文件名"
+VIDEO_PATH = "视频路径"
+COVER_PATH = "封面路径"
+SKU_CODE = "SKU编码"
+SKU_STYLE = "SKU款式"
+SKU_STYLE_NAME = "SKU款式名"
+USE_STATUS = "使用状态"
+PUBLISH_DATE = "发布日期"
+PUBLISH_TIME = "发布时间"
+SCHEDULED_TIME = "定时发布时间"
+YELLOW_CART_TITLE = "小黄车标题"
+YELLOW_CART_TITLE_DOUYIN = "小黄车标题（抖音）"
+BLUE_SEARCH_TERM = "看后搜小蓝词（抖音）"
+LOCATION_WECHAT = "位置信息（视频号）"
+LOCATION = "位置信息"
+POPULAR_FLAG = "热门款"
+
+TITLE = "标题"
+USE_COUNT = "使用次数"
+HOT_SCORE = "爆款分"
+SHORT_TITLE_WECHAT = "短标题（视频号）"
+
+TAG_1 = "标签1"
+TAG_2 = "标签2"
+TAG_3 = "标签3"
+TAG_4 = "标签4"
+TAG_5 = "标签5"
+
+TASK_ID = "任务ID"
+TASK_DATE = "任务日期"
+PUBLISH_PLATFORM = "发布平台"
+ACCOUNT_NAME = "账号名称"
+PRODUCT_NAME = "商品名称"
+MARK_ORIGINAL = "标记原创"
+TASK_STATUS = "任务状态"
+
+SUMMARY_KEY = "指标"
+SUMMARY_VALUE = "值"
+
+TITLE_LIBRARY_HEADERS = [
+    TITLE,
+    USE_STATUS,
+    USE_COUNT,
+    HOT_SCORE,
+    SHORT_TITLE_WECHAT,
+]
+
+TAG_LIBRARY_HEADERS = [
+    SKU_CODE,
+    SKU_STYLE_NAME,
+    TAG_1,
+    TAG_2,
+    TAG_3,
+    TAG_4,
+    TAG_5,
+]
+
+VIDEO_LIBRARY_HEADERS = [
+    VIDEO_FILE_NAME,
+    VIDEO_PATH,
+    COVER_PATH,
+    SKU_CODE,
+    SKU_STYLE,
+    USE_STATUS,
+    PUBLISH_DATE,
+    PUBLISH_TIME,
+    YELLOW_CART_TITLE,
+    BLUE_SEARCH_TERM,
+    LOCATION_WECHAT,
+    POPULAR_FLAG,
+]
+
+TASK_HEADERS = [
+    TASK_ID,
+    TASK_DATE,
+    SCHEDULED_TIME,
+    PUBLISH_PLATFORM,
+    ACCOUNT_NAME,
+    SKU_STYLE_NAME,
+    SKU_CODE,
+    PRODUCT_NAME,
+    VIDEO_FILE_NAME,
+    VIDEO_PATH,
+    COVER_PATH,
+    TITLE,
+    TAG_1,
+    TAG_2,
+    TAG_3,
+    TAG_4,
+    TAG_5,
+    MARK_ORIGINAL,
+    YELLOW_CART_TITLE_DOUYIN,
+    LOCATION,
+    TASK_STATUS,
+]
+
+TITLE_SCORE_THRESHOLD_DEFAULT = 80

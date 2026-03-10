@@ -1,0 +1,77 @@
+{
+  "global": [
+    {
+      "id": "G01",
+      "angle": "straight",
+      "pattern": "{product_name}，{selling_point}"
+    },
+    {
+      "id": "G02",
+      "angle": "scene",
+      "pattern": "{theme}场景里，我更常拿这个{title_keyword}"
+    },
+    {
+      "id": "G03",
+      "angle": "audience",
+      "pattern": "{target_audience}可以直接看这款{product_name}"
+    },
+    {
+      "id": "G04",
+      "angle": "benefit",
+      "pattern": "{product_name}的实用点，其实是{selling_point}"
+    }
+  ],
+  "platforms": {
+    "douyin": [
+      {
+        "id": "DY01",
+        "angle": "hook",
+        "pattern": "{product_name}别乱买，这个版本更省心"
+      },
+      {
+        "id": "DY02",
+        "angle": "pain-point",
+        "pattern": "{target_audience}用{title_keyword}，先看这一条"
+      },
+      {
+        "id": "DY03",
+        "angle": "quick",
+        "pattern": "{theme}党常备的{product_name}"
+      }
+    ],
+    "xiaohongshu": [
+      {
+        "id": "XHS01",
+        "angle": "notes",
+        "pattern": "{theme}好物分享：{product_name}"
+      },
+      {
+        "id": "XHS02",
+        "angle": "list",
+        "pattern": "{target_audience}会反复回购的{title_keyword}"
+      },
+      {
+        "id": "XHS03",
+        "angle": "experience",
+        "pattern": "最近常用的{product_name}，因为它{selling_point}"
+      }
+    ],
+    "shipinhao": [
+      {
+        "id": "SPH01",
+        "angle": "friendly",
+        "pattern": "{theme}时顺手用的{product_name}"
+      },
+      {
+        "id": "SPH02",
+        "angle": "practical",
+        "pattern": "{product_name}简单实用，重点是{selling_point}"
+      },
+      {
+        "id": "SPH03",
+        "angle": "recommend",
+        "pattern": "给{target_audience}的一条{title_keyword}推荐"
+      }
+    ]
+  }
+}
