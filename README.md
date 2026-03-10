@@ -182,7 +182,7 @@ python3 scripts/generate_daily_tasks.py
 - `数据源` 页签：导入/导出视频库、标签库、标题库、任务单
 - `标题生成` 页签：Prompt、API Key、Base URL、模型名、模型提供方设置
 - `任务单生成` 页签：业务流程可视化、热门款/普通款筛选、爆款标题/普通标题筛选、平台计划
-- `更新` 页签：GitHub 仓库设置、手动检查更新、打开下载页
+- `更新` 页签：GitHub 仓库设置、检查最新 Release、下载并安装更新
 
 编译：
 
@@ -213,7 +213,7 @@ swift build -c release
 GitHub Release：
 
 - 推送 `v*` tag 后，工作流 [release.yml](/Users/indincys/Documents/code/poster/.github/workflows/release.yml) 会自动构建并上传 zip 到 Release
-- App 内部通过 GitHub Releases API 手动检查最新版本，再跳转下载
+- App 内部通过 GitHub Releases API 检查最新版本，直接下载 `.zip` 并自动替换安装
 
 ## 说明
 

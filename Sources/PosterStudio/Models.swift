@@ -276,10 +276,28 @@ struct TaskGenerationSettings {
 struct UpdateSettings {
     var repoOwner: String = ""
     var repoName: String = ""
+
+    var trimmedOwner: String {
+        repoOwner.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedRepoName: String {
+        repoName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasRepository: Bool {
+        !trimmedOwner.isEmpty && !trimmedRepoName.isEmpty
+    }
+
+    var releasesPageURL: URL? {
+        guard hasRepository else { return nil }
+        return URL(string: "https://github.com/\(trimmedOwner)/\(trimmedRepoName)/releases")
+    }
 }
 
 struct ReleaseInfo: Hashable {
     var version: String
     var pageURL: URL
     var downloadURL: URL?
+    var assetName: String?
 }

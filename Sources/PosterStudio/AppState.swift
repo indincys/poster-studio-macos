@@ -2,6 +2,9 @@ import Foundation
 
 @MainActor
 final class AppState: ObservableObject {
+    private static let updateRepoOwnerDefaultsKey = "update.repoOwner"
+    private static let updateRepoNameDefaultsKey = "update.repoName"
+
     @Published var titleRecords: [TitleRecord] = []
     @Published var tagRecords: [TagRecord] = []
     @Published var videoRecords: [VideoRecord] = []
@@ -9,14 +12,21 @@ final class AppState: ObservableObject {
 
     @Published var titleSettings = TitleGenerationSettings()
     @Published var taskSettings = TaskGenerationSettings()
-    @Published var updateSettings = UpdateSettings()
+    @Published var updateSettings: UpdateSettings {
+        didSet { persistUpdateSettings() }
+    }
 
     @Published var latestRelease: ReleaseInfo?
+    @Published var currentVersion: String
     @Published var statusMessage = "准备就绪"
+    @Published var updateStatusMessage = "填写 GitHub 仓库后即可检查更新"
     @Published var isGeneratingTitles = false
     @Published var isCheckingUpdate = false
+    @Published var isInstallingUpdate = false
 
     init() {
+        updateSettings = Self.loadPersistedUpdateSettings()
+        currentVersion = UpdateService.currentVersionDisplay()
         loadBuiltInSamples()
     }
 
@@ -80,13 +90,62 @@ final class AppState: ObservableObject {
     }
 
     func checkForUpdate() async {
+        guard updateSettings.hasRepository else {
+            let message = UpdateServiceError.missingRepository.localizedDescription
+            statusMessage = message
+            updateStatusMessage = message
+            return
+        }
+
         isCheckingUpdate = true
+        updateStatusMessage = "正在检查 GitHub Releases..."
         defer { isCheckingUpdate = false }
         do {
             latestRelease = try await UpdateService.checkForLatestRelease(settings: updateSettings)
-            statusMessage = "已检查更新"
+            if let latestRelease {
+                if UpdateService.canInstall(release: latestRelease, currentVersion: currentVersion) {
+                    let message = "发现新版本 \(latestRelease.version)，可直接下载安装"
+                    statusMessage = message
+                    updateStatusMessage = message
+                } else if latestRelease.downloadURL == nil {
+                    let message = "已获取最新发布 \(latestRelease.version)，但没有可安装的 .zip 包"
+                    statusMessage = message
+                    updateStatusMessage = message
+                } else {
+                    let message = "当前已是最新版本 \(currentVersion)"
+                    statusMessage = message
+                    updateStatusMessage = message
+                }
+            }
         } catch {
             statusMessage = error.localizedDescription
+            updateStatusMessage = error.localizedDescription
+        }
+    }
+
+    func installLatestRelease() async {
+        guard let latestRelease else {
+            let message = "请先检查更新"
+            statusMessage = message
+            updateStatusMessage = message
+            return
+        }
+
+        isInstallingUpdate = true
+        let message = "正在下载并准备安装 \(latestRelease.version)..."
+        statusMessage = message
+        updateStatusMessage = message
+
+        do {
+            let targetURL = try await UpdateService.installRelease(latestRelease)
+            let displayPath = targetURL.path.replacingOccurrences(of: NSHomeDirectory(), with: "~")
+            let installMessage = "安装包已准备完成，应用将自动重启并安装到 \(displayPath)"
+            statusMessage = installMessage
+            updateStatusMessage = installMessage
+        } catch {
+            isInstallingUpdate = false
+            statusMessage = error.localizedDescription
+            updateStatusMessage = error.localizedDescription
         }
     }
 
@@ -183,5 +242,19 @@ final class AppState: ObservableObject {
             }
             return mapping
         }
+    }
+
+    private func persistUpdateSettings() {
+        let defaults = UserDefaults.standard
+        defaults.set(updateSettings.trimmedOwner, forKey: Self.updateRepoOwnerDefaultsKey)
+        defaults.set(updateSettings.trimmedRepoName, forKey: Self.updateRepoNameDefaultsKey)
+    }
+
+    private static func loadPersistedUpdateSettings() -> UpdateSettings {
+        let defaults = UserDefaults.standard
+        return UpdateSettings(
+            repoOwner: defaults.string(forKey: updateRepoOwnerDefaultsKey) ?? "",
+            repoName: defaults.string(forKey: updateRepoNameDefaultsKey) ?? ""
+        )
     }
 }

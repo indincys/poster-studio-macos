@@ -216,7 +216,7 @@ struct ContentView: View {
             Text("GitHub 发布与更新")
                 .font(.title3.bold())
 
-            Text("第一代版本采用 GitHub Releases 手动检查更新、手动下载安装。")
+            Text("填写仓库后，应用会检查 GitHub Releases 的最新版本，直接下载 `.zip` 安装包并自动替换当前应用。")
                 .foregroundStyle(.secondary)
 
             HStack {
@@ -229,21 +229,58 @@ struct ContentView: View {
                 Button(appState.isCheckingUpdate ? "检查中..." : "手动检查更新") {
                     Task { await appState.checkForUpdate() }
                 }
-                .disabled(appState.isCheckingUpdate)
+                .disabled(appState.isCheckingUpdate || appState.isInstallingUpdate || !appState.updateSettings.hasRepository)
 
-                if let release = appState.latestRelease {
-                    Text("最新版本：\(release.version)")
-                    Button("打开下载页") {
-                        UpdateService.openRelease(release)
+                if let releasesPageURL = appState.updateSettings.releasesPageURL {
+                    Link("打开 Releases 页面", destination: releasesPageURL)
+                }
+            }
+
+            VStack(alignment: .leading, spacing: 6) {
+                Text("当前版本：\(appState.currentVersion)")
+                Text(appState.updateStatusMessage)
+                    .foregroundStyle(.secondary)
+            }
+
+            if let release = appState.latestRelease {
+                GroupBox("最新发布") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Text("版本：\(release.version)")
+
+                        if let assetName = release.assetName {
+                            Text("安装包：\(assetName)")
+                                .foregroundStyle(.secondary)
+                        }
+
+                        HStack {
+                            Button(appState.isInstallingUpdate ? "安装中..." : "下载并安装更新") {
+                                Task { await appState.installLatestRelease() }
+                            }
+                            .disabled(
+                                appState.isCheckingUpdate ||
+                                appState.isInstallingUpdate ||
+                                !UpdateService.canInstall(release: release, currentVersion: appState.currentVersion)
+                            )
+
+                            Button("打开当前 Release") {
+                                UpdateService.openReleasePage(release)
+                            }
+                        }
+
+                        if !UpdateService.canInstall(release: release, currentVersion: appState.currentVersion) {
+                            Text(release.downloadURL == nil ? "这个 release 缺少可安装的 `.zip` 资产。" : "当前已是最新版本，无需重复安装。")
+                                .font(.footnote)
+                                .foregroundStyle(.secondary)
+                        }
                     }
                 }
             }
 
-            GroupBox("发布建议") {
+            GroupBox("发布要求") {
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("1. 统一在 GitHub 新仓库维护这个 macOS 工具。")
-                    Text("2. 每次发版上传 arm64 的 `.app.zip` 到 Release。")
-                    Text("3. 软件内点击“手动检查更新”后读取最新 Release 并跳转下载。")
+                    Text("1. 每次发版继续上传 arm64 的 `.app.zip` 到 GitHub Release。")
+                    Text("2. 版本号要递增，例如 `v0.1.0`、`v0.1.1`。")
+                    Text("3. 如果当前应用目录不可写，更新会自动安装到 `~/Applications`。")
                 }
                 .foregroundStyle(.secondary)
             }
