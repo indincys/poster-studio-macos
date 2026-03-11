@@ -293,11 +293,34 @@ struct UpdateSettings {
         guard hasRepository else { return nil }
         return URL(string: "https://github.com/\(trimmedOwner)/\(trimmedRepoName)/releases")
     }
+
+    var normalizedOwner: String {
+        trimmedOwner
+    }
+
+    var normalizedRepoName: String {
+        trimmedRepoName
+    }
+
+    var isConfigured: Bool {
+        hasRepository
+    }
+
+    var releasePageURL: URL? {
+        releasesPageURL
+    }
 }
 
 struct ReleaseInfo: Hashable {
     var version: String
+    var tagName: String
     var pageURL: URL
     var downloadURL: URL?
     var assetName: String?
+    var publishedAt: Date?
+}
+
+struct UpdateCheckResult: Hashable {
+    var latestRelease: ReleaseInfo
+    var isUpdateAvailable: Bool
 }

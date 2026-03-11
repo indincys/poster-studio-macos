@@ -4,11 +4,11 @@ import Foundation
 enum UpdateServiceError: LocalizedError {
     case missingRepository
     case invalidResponse
-    case missingDownloadAsset
-    case invalidDownloadURL
-    case archiveExtractionFailed
-    case appBundleNotFound
-    case installerPreparationFailed
+    case missingInstallAsset
+    case unsupportedInstallationTarget
+    case downloadFailed
+    case unpackFailed
+    case installFailed
     case processFailed(String)
 
     var errorDescription: String? {
@@ -17,16 +17,16 @@ enum UpdateServiceError: LocalizedError {
             return "请先填写 GitHub 仓库 owner 和 repo"
         case .invalidResponse:
             return "更新接口返回格式无效"
-        case .missingDownloadAsset:
-            return "最新 Release 没有可安装的 .zip 包"
-        case .invalidDownloadURL:
-            return "更新下载地址无效"
-        case .archiveExtractionFailed:
-            return "更新包解压失败"
-        case .appBundleNotFound:
-            return "更新包里没有找到 .app 安装包"
-        case .installerPreparationFailed:
-            return "无法准备更新安装器"
+        case .missingInstallAsset:
+            return "最新 Release 没有可安装的 .zip 资产"
+        case .unsupportedInstallationTarget:
+            return "当前只支持从已安装的 .app 包内执行更新"
+        case .downloadFailed:
+            return "下载更新包失败"
+        case .unpackFailed:
+            return "解压更新包失败"
+        case .installFailed:
+            return "启动安装流程失败"
         case .processFailed(let message):
             return message
         }
@@ -34,19 +34,37 @@ enum UpdateServiceError: LocalizedError {
 }
 
 enum UpdateService {
+    static func currentVersionDisplay(bundle: Bundle = .main) -> String {
+        normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+            ?? normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+            ?? "开发版"
+    }
+
+    static func installedVersion(bundle: Bundle = .main) -> String {
+        normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
+            ?? normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
+            ?? "0.0.0"
+    }
+
     static func checkForLatestRelease(settings: UpdateSettings) async throws -> ReleaseInfo {
+        try await checkForLatestRelease(settings: settings, currentVersion: nil).latestRelease
+    }
+
+    static func checkForLatestRelease(settings: UpdateSettings, currentVersion: String? = nil) async throws -> UpdateCheckResult {
+        let owner = settings.trimmedOwner
+        let repo = settings.trimmedRepoName
         guard settings.hasRepository else {
             throw UpdateServiceError.missingRepository
         }
 
-        guard let url = URL(string: "https://api.github.com/repos/\(settings.trimmedOwner)/\(settings.trimmedRepoName)/releases/latest") else {
+        guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest") else {
             throw UpdateServiceError.invalidResponse
         }
 
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
-        let (data, response) = try await URLSession.shared.data(for: request)
 
+        let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
             throw UpdateServiceError.invalidResponse
         }
@@ -55,15 +73,24 @@ enum UpdateService {
         guard let pageURL = URL(string: release.htmlURL) else {
             throw UpdateServiceError.invalidResponse
         }
-        let asset = preferredAsset(in: release.assets)
-        let downloadURL = asset.flatMap { URL(string: $0.browserDownloadURL) }
-        return ReleaseInfo(version: release.tagName, pageURL: pageURL, downloadURL: downloadURL, assetName: asset?.name)
-    }
 
-    static func currentVersionDisplay() -> String {
-        let shortVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
-        let buildVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
-        return normalizedVersion(shortVersion) ?? normalizedVersion(buildVersion) ?? "开发版"
+        let asset = installAsset(from: release.assets)
+        let downloadURL = asset.flatMap { URL(string: $0.browserDownloadURL) }
+
+        let latestRelease = ReleaseInfo(
+            version: normalizedVersion(release.tagName) ?? release.tagName,
+            tagName: release.tagName,
+            pageURL: pageURL,
+            downloadURL: downloadURL,
+            assetName: asset?.name,
+            publishedAt: release.publishedAt.flatMap(parsePublishedDate)
+        )
+
+        let installed = normalizedVersion(currentVersion) ?? installedVersion()
+        return UpdateCheckResult(
+            latestRelease: latestRelease,
+            isUpdateAvailable: canInstall(release: latestRelease, currentVersion: installed)
+        )
     }
 
     static func canInstall(release: ReleaseInfo, currentVersion: String) -> Bool {
@@ -75,56 +102,28 @@ enum UpdateService {
 
     @discardableResult
     static func installRelease(_ release: ReleaseInfo) async throws -> URL {
-        guard let downloadURL = release.downloadURL else {
-            throw UpdateServiceError.missingDownloadAsset
+        guard let targetAppURL = installedBundleURL() else {
+            throw UpdateServiceError.unsupportedInstallationTarget
         }
 
-        let fileManager = FileManager.default
-        let workingDirectory = fileManager.temporaryDirectory
-            .appendingPathComponent("PosterStudioUpdate-\(UUID().uuidString)", isDirectory: true)
-        try fileManager.createDirectory(at: workingDirectory, withIntermediateDirectories: true)
-
-        let archiveURL = workingDirectory.appendingPathComponent(release.assetName ?? "PosterStudio-update.zip")
-        let extractedDirectory = workingDirectory.appendingPathComponent("expanded", isDirectory: true)
-        try fileManager.createDirectory(at: extractedDirectory, withIntermediateDirectories: true)
-
-        let temporaryDownloadURL = try await downloadArchive(from: downloadURL)
-        try fileManager.moveItem(at: temporaryDownloadURL, to: archiveURL)
+        let preparedUpdate = try await prepareUpdate(release: release, targetAppURL: targetAppURL)
 
         do {
-            try runProcess(
-                executable: "/usr/bin/ditto",
-                arguments: ["-x", "-k", archiveURL.path, extractedDirectory.path]
-            )
+            try launchInstaller(preparedUpdate)
         } catch {
-            throw UpdateServiceError.archiveExtractionFailed
-        }
-
-        let appBundleURL = try findAppBundle(in: extractedDirectory)
-        let targetURL = try installationTargetURL(fallbackAppName: appBundleURL.lastPathComponent)
-        let installerScriptURL = try writeInstallerScript(into: workingDirectory)
-
-        let installer = Process()
-        installer.executableURL = URL(fileURLWithPath: "/bin/zsh")
-        installer.arguments = [
-            installerScriptURL.path,
-            appBundleURL.path,
-            targetURL.path,
-            String(ProcessInfo.processInfo.processIdentifier),
-            workingDirectory.path,
-        ]
-
-        do {
-            try installer.run()
-        } catch {
-            throw UpdateServiceError.installerPreparationFailed
+            throw UpdateServiceError.installFailed
         }
 
         await MainActor.run {
             NSApplication.shared.terminate(nil)
         }
 
-        return targetURL
+        return targetAppURL
+    }
+
+    static func openReleasePage(settings: UpdateSettings) {
+        guard let url = settings.releasesPageURL else { return }
+        openURL(url)
     }
 
     static func openReleasePage(_ release: ReleaseInfo) {
@@ -135,8 +134,97 @@ enum UpdateService {
         NSWorkspace.shared.open(url)
     }
 
-    private static func preferredAsset(in assets: [GitHubRelease.Asset]) -> GitHubRelease.Asset? {
-        assets.first { $0.name.lowercased().hasSuffix(".zip") }
+    static func installUpdate(_ release: ReleaseInfo) async throws {
+        _ = try await installRelease(release)
+    }
+
+    private static func prepareUpdate(release: ReleaseInfo, targetAppURL: URL) async throws -> PreparedUpdate {
+        guard let downloadURL = release.downloadURL else {
+            throw UpdateServiceError.missingInstallAsset
+        }
+
+        return try await Task.detached(priority: .userInitiated) {
+            let fileManager = FileManager.default
+            let stagingRoot = fileManager.temporaryDirectory
+                .appendingPathComponent("PosterStudioUpdate-\(UUID().uuidString)", isDirectory: true)
+            let archiveName = release.assetName ?? "PosterStudio-update.zip"
+            let archiveURL = stagingRoot.appendingPathComponent(archiveName)
+            let unpackedDirectoryURL = stagingRoot.appendingPathComponent("unpacked", isDirectory: true)
+            let installerScriptURL = stagingRoot.appendingPathComponent("install_update.sh")
+
+            try fileManager.createDirectory(at: stagingRoot, withIntermediateDirectories: true, attributes: nil)
+            try fileManager.createDirectory(at: unpackedDirectoryURL, withIntermediateDirectories: true, attributes: nil)
+
+            let (temporaryArchiveURL, response) = try await URLSession.shared.download(from: downloadURL)
+            guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
+                throw UpdateServiceError.downloadFailed
+            }
+
+            try fileManager.moveItem(at: temporaryArchiveURL, to: archiveURL)
+            try runProcess("/usr/bin/ditto", arguments: ["-x", "-k", archiveURL.path, unpackedDirectoryURL.path])
+
+            guard let stagedAppURL = locateAppBundle(in: unpackedDirectoryURL) else {
+                throw UpdateServiceError.unpackFailed
+            }
+
+            try installerScript().write(to: installerScriptURL, atomically: true, encoding: .utf8)
+            try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installerScriptURL.path)
+
+            return PreparedUpdate(
+                targetAppURL: targetAppURL,
+                stagedAppURL: stagedAppURL,
+                stagingRootURL: stagingRoot,
+                installerScriptURL: installerScriptURL
+            )
+        }.value
+    }
+
+    private static func launchInstaller(_ preparedUpdate: PreparedUpdate) throws {
+        let process = Process()
+        process.standardOutput = nil
+        process.standardError = nil
+
+        let arguments = [
+            preparedUpdate.installerScriptURL.path,
+            "\(ProcessInfo.processInfo.processIdentifier)",
+            preparedUpdate.targetAppURL.path,
+            preparedUpdate.stagedAppURL.path,
+            preparedUpdate.stagingRootURL.path,
+        ]
+
+        if requiresAdministratorPrivileges(for: preparedUpdate.targetAppURL) {
+            process.executableURL = URL(fileURLWithPath: "/usr/bin/osascript")
+            let shellCommand = (["/bin/zsh"] + arguments).map(shellQuote).joined(separator: " ")
+            let appleScript = "do shell script \(appleScriptLiteral(shellCommand)) with administrator privileges"
+            process.arguments = ["-e", appleScript]
+        } else {
+            process.executableURL = URL(fileURLWithPath: "/bin/zsh")
+            process.arguments = arguments
+        }
+
+        try process.run()
+
+        DispatchQueue.main.async {
+            NSApplication.shared.terminate(nil)
+        }
+    }
+
+    private static func installedBundleURL(bundle: Bundle = .main) -> URL? {
+        let bundleURL = bundle.bundleURL.standardizedFileURL
+        guard bundleURL.pathExtension == "app", FileManager.default.fileExists(atPath: bundleURL.path) else {
+            return nil
+        }
+        return bundleURL
+    }
+
+    private static func installAsset(from assets: [GitHubRelease.Asset]) -> GitHubRelease.Asset? {
+        let appName = (Bundle.main.object(forInfoDictionaryKey: "CFBundleName") as? String) ?? "PosterStudio"
+        return assets.first(where: { $0.name.hasSuffix(".zip") && $0.name.localizedCaseInsensitiveContains(appName) })
+            ?? assets.first(where: { $0.name.hasSuffix(".zip") })
+    }
+
+    private static func parsePublishedDate(_ value: String) -> Date? {
+        ISO8601DateFormatter().date(from: value)
     }
 
     private static func normalizedVersion(_ version: String?) -> String? {
@@ -144,101 +232,34 @@ enum UpdateService {
         let trimmed = version.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return nil }
         guard trimmed.rangeOfCharacter(from: .decimalDigits) != nil else { return nil }
-        return trimmed.replacingOccurrences(of: #"^[vV]"#, with: "", options: .regularExpression)
+        if trimmed.hasPrefix("v") || trimmed.hasPrefix("V") {
+            return String(trimmed.dropFirst())
+        }
+        return trimmed
     }
 
-    private static func downloadArchive(from url: URL) async throws -> URL {
-        guard url.scheme?.hasPrefix("http") == true else {
-            throw UpdateServiceError.invalidDownloadURL
-        }
-
-        var request = URLRequest(url: url)
-        request.setValue("application/octet-stream", forHTTPHeaderField: "Accept")
-        let (temporaryURL, response) = try await URLSession.shared.download(for: request)
-
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw UpdateServiceError.invalidResponse
-        }
-
-        return temporaryURL
+    private static func compareVersions(_ lhs: String, _ rhs: String) -> ComparisonResult {
+        let left = normalizedVersion(lhs) ?? lhs
+        let right = normalizedVersion(rhs) ?? rhs
+        return left.compare(right, options: .numeric)
     }
 
-    private static func findAppBundle(in root: URL) throws -> URL {
-        let fileManager = FileManager.default
-        if root.pathExtension == "app" {
-            return root
+    private static func locateAppBundle(in directory: URL) -> URL? {
+        guard let enumerator = FileManager.default.enumerator(at: directory, includingPropertiesForKeys: nil) else {
+            return nil
         }
 
-        guard let enumerator = fileManager.enumerator(at: root, includingPropertiesForKeys: [.isDirectoryKey]) else {
-            throw UpdateServiceError.appBundleNotFound
+        for case let fileURL as URL in enumerator where fileURL.pathExtension == "app" {
+            return fileURL
         }
 
-        for case let url as URL in enumerator where url.pathExtension == "app" {
-            return url
-        }
-
-        throw UpdateServiceError.appBundleNotFound
+        return nil
     }
 
-    private static func installationTargetURL(fallbackAppName: String) throws -> URL {
-        let fileManager = FileManager.default
-        let runningBundleURL = Bundle.main.bundleURL.standardizedFileURL
-
-        if runningBundleURL.pathExtension == "app" {
-            let parentDirectory = runningBundleURL.deletingLastPathComponent()
-            if fileManager.isWritableFile(atPath: parentDirectory.path) {
-                return runningBundleURL
-            }
-        }
-
-        let userApplicationsDirectory = fileManager.homeDirectoryForCurrentUser
-            .appendingPathComponent("Applications", isDirectory: true)
-        try fileManager.createDirectory(at: userApplicationsDirectory, withIntermediateDirectories: true)
-
-        let appName = runningBundleURL.pathExtension == "app" ? runningBundleURL.lastPathComponent : fallbackAppName
-        return userApplicationsDirectory.appendingPathComponent(appName, isDirectory: true)
-    }
-
-    private static func writeInstallerScript(into directory: URL) throws -> URL {
-        let script = """
-        #!/bin/zsh
-        set -euo pipefail
-
-        SOURCE_APP="$1"
-        TARGET_APP="$2"
-        APP_PID="$3"
-        TEMP_ROOT="$4"
-
-        while kill -0 "$APP_PID" 2>/dev/null; do
-          sleep 0.5
-        done
-
-        sleep 1
-        mkdir -p "${TARGET_APP:h}"
-        rm -rf "$TARGET_APP"
-        ditto "$SOURCE_APP" "$TARGET_APP"
-        xattr -dr com.apple.quarantine "$TARGET_APP" >/dev/null 2>&1 || true
-        open "$TARGET_APP"
-        rm -rf "$TEMP_ROOT"
-        """
-
-        let scriptURL = directory.appendingPathComponent("install_update.sh")
-        guard let data = script.data(using: .utf8) else {
-            throw UpdateServiceError.installerPreparationFailed
-        }
-        try data.write(to: scriptURL)
-        try FileManager.default.setAttributes(
-            [.posixPermissions: 0o755],
-            ofItemAtPath: scriptURL.path
-        )
-        return scriptURL
-    }
-
-    private static func runProcess(executable: String, arguments: [String]) throws {
+    private static func runProcess(_ executable: String, arguments: [String]) throws {
         let process = Process()
         process.executableURL = URL(fileURLWithPath: executable)
         process.arguments = arguments
-
         let errorPipe = Pipe()
         process.standardError = errorPipe
         try process.run()
@@ -250,6 +271,70 @@ enum UpdateService {
             throw UpdateServiceError.processFailed(message)
         }
     }
+
+    private static func requiresAdministratorPrivileges(for targetAppURL: URL) -> Bool {
+        let fileManager = FileManager.default
+        if fileManager.fileExists(atPath: targetAppURL.path) {
+            return !fileManager.isWritableFile(atPath: targetAppURL.path)
+        }
+        return !fileManager.isWritableFile(atPath: targetAppURL.deletingLastPathComponent().path)
+    }
+
+    private static func shellQuote(_ value: String) -> String {
+        "'\(value.replacingOccurrences(of: "'", with: "'\"'\"'"))'"
+    }
+
+    private static func appleScriptLiteral(_ value: String) -> String {
+        let escaped = value
+            .replacingOccurrences(of: "\\", with: "\\\\")
+            .replacingOccurrences(of: "\"", with: "\\\"")
+        return "\"\(escaped)\""
+    }
+
+    private static func installerScript() -> String {
+        """
+        #!/bin/zsh
+        set -euo pipefail
+
+        TARGET_PID="$1"
+        TARGET_APP="$2"
+        STAGED_APP="$3"
+        STAGING_ROOT="$4"
+        BACKUP_APP="${TARGET_APP}.previous"
+
+        for _ in {1..120}; do
+          if ! kill -0 "$TARGET_PID" 2>/dev/null; then
+            break
+          fi
+          sleep 1
+        done
+
+        rm -rf "$BACKUP_APP"
+        if [[ -d "$TARGET_APP" ]]; then
+          mv "$TARGET_APP" "$BACKUP_APP"
+        fi
+
+        if ! /usr/bin/ditto "$STAGED_APP" "$TARGET_APP"; then
+          rm -rf "$TARGET_APP"
+          if [[ -d "$BACKUP_APP" ]]; then
+            mv "$BACKUP_APP" "$TARGET_APP"
+          fi
+          exit 1
+        fi
+
+        /usr/bin/xattr -cr "$TARGET_APP" >/dev/null 2>&1 || true
+        rm -rf "$BACKUP_APP"
+        /usr/bin/open "$TARGET_APP"
+        rm -rf "$STAGING_ROOT"
+        """
+    }
+}
+
+private struct PreparedUpdate {
+    var targetAppURL: URL
+    var stagedAppURL: URL
+    var stagingRootURL: URL
+    var installerScriptURL: URL
 }
 
 private struct GitHubRelease: Codable {
@@ -266,10 +351,12 @@ private struct GitHubRelease: Codable {
     var tagName: String
     var htmlURL: String
     var assets: [Asset]
+    var publishedAt: String?
 
     enum CodingKeys: String, CodingKey {
         case tagName = "tag_name"
         case htmlURL = "html_url"
         case assets
+        case publishedAt = "published_at"
     }
 }

@@ -280,7 +280,7 @@ struct ContentView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("1. 每次发版继续上传 arm64 的 `.app.zip` 到 GitHub Release。")
                     Text("2. 版本号要递增，例如 `v0.1.0`、`v0.1.1`。")
-                    Text("3. 如果当前应用目录不可写，更新会自动安装到 `~/Applications`。")
+                    Text("3. 如果安装在 `/Applications`，更新时会请求系统授权后原位替换。")
                 }
                 .foregroundStyle(.secondary)
             }
