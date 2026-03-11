@@ -274,8 +274,11 @@ struct TaskGenerationSettings {
 }
 
 struct UpdateSettings {
-    var repoOwner: String = ""
-    var repoName: String = ""
+    static let officialRepoOwner = "indincys"
+    static let officialRepoName = "poster-studio-macos"
+
+    var repoOwner: String = UpdateSettings.officialRepoOwner
+    var repoName: String = UpdateSettings.officialRepoName
 
     var trimmedOwner: String {
         repoOwner.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -308,6 +311,10 @@ struct UpdateSettings {
 
     var releasePageURL: URL? {
         releasesPageURL
+    }
+
+    static var official: UpdateSettings {
+        UpdateSettings(repoOwner: officialRepoOwner, repoName: officialRepoName)
     }
 }
 

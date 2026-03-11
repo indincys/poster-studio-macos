@@ -4,6 +4,7 @@ import Foundation
 final class AppState: ObservableObject {
     private static let updateRepoOwnerDefaultsKey = "update.repoOwner"
     private static let updateRepoNameDefaultsKey = "update.repoName"
+    private var hasPerformedInitialUpdateCheck = false
 
     @Published var titleRecords: [TitleRecord] = []
     @Published var tagRecords: [TagRecord] = []
@@ -19,7 +20,7 @@ final class AppState: ObservableObject {
     @Published var latestRelease: ReleaseInfo?
     @Published var currentVersion: String
     @Published var statusMessage = "准备就绪"
-    @Published var updateStatusMessage = "填写 GitHub 仓库后即可检查更新"
+    @Published var updateStatusMessage = "应用已绑定官方 GitHub Release，可直接检查更新"
     @Published var isGeneratingTitles = false
     @Published var isCheckingUpdate = false
     @Published var isInstallingUpdate = false
@@ -27,6 +28,7 @@ final class AppState: ObservableObject {
     init() {
         updateSettings = Self.loadPersistedUpdateSettings()
         currentVersion = UpdateService.currentVersionDisplay()
+        updateStatusMessage = "更新源：\(updateSettings.trimmedOwner)/\(updateSettings.trimmedRepoName)"
         loadBuiltInSamples()
     }
 
@@ -121,6 +123,21 @@ final class AppState: ObservableObject {
             statusMessage = error.localizedDescription
             updateStatusMessage = error.localizedDescription
         }
+    }
+
+    func performInitialUpdateCheckIfNeeded() async {
+        guard !hasPerformedInitialUpdateCheck else { return }
+        hasPerformedInitialUpdateCheck = true
+        guard updateSettings.hasRepository else { return }
+        await checkForUpdate()
+    }
+
+    func restoreOfficialUpdateRepository() {
+        updateSettings = .official
+        latestRelease = nil
+        let message = "已恢复官方更新源：\(updateSettings.trimmedOwner)/\(updateSettings.trimmedRepoName)"
+        statusMessage = message
+        updateStatusMessage = message
     }
 
     func installLatestRelease() async {
@@ -252,9 +269,15 @@ final class AppState: ObservableObject {
 
     private static func loadPersistedUpdateSettings() -> UpdateSettings {
         let defaults = UserDefaults.standard
-        return UpdateSettings(
-            repoOwner: defaults.string(forKey: updateRepoOwnerDefaultsKey) ?? "",
-            repoName: defaults.string(forKey: updateRepoNameDefaultsKey) ?? ""
-        )
+        let owner = defaults.string(forKey: updateRepoOwnerDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let repo = defaults.string(forKey: updateRepoNameDefaultsKey)?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+
+        guard !owner.isEmpty, !repo.isEmpty else {
+            return .official
+        }
+
+        return UpdateSettings(repoOwner: owner, repoName: repo)
     }
 }

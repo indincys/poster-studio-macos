@@ -21,6 +21,9 @@ struct ContentView: View {
         }
         .padding(18)
         .frame(minWidth: 1180, minHeight: 780)
+        .task {
+            await appState.performInitialUpdateCheckIfNeeded()
+        }
     }
 
     private var librariesTab: some View {
@@ -216,7 +219,7 @@ struct ContentView: View {
             Text("GitHub 发布与更新")
                 .font(.title3.bold())
 
-            Text("填写仓库后，应用会检查 GitHub Releases 的最新版本，直接下载 `.zip` 安装包并自动替换当前应用。")
+            Text("应用默认指向官方 GitHub Releases，可直接检查最新版本、打开发布页，并下载 `.zip` 安装包自动替换当前应用。")
                 .foregroundStyle(.secondary)
 
             HStack {
@@ -230,6 +233,11 @@ struct ContentView: View {
                     Task { await appState.checkForUpdate() }
                 }
                 .disabled(appState.isCheckingUpdate || appState.isInstallingUpdate || !appState.updateSettings.hasRepository)
+
+                Button("恢复官方仓库") {
+                    appState.restoreOfficialUpdateRepository()
+                }
+                .disabled(appState.isCheckingUpdate || appState.isInstallingUpdate)
 
                 if let releasesPageURL = appState.updateSettings.releasesPageURL {
                     Link("打开 Releases 页面", destination: releasesPageURL)
