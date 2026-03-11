@@ -4,6 +4,7 @@ import UniformTypeIdentifiers
 
 struct ContentView: View {
     @ObservedObject var appState: AppState
+    @State private var isTitleModelSettingsExpanded = false
 
     var body: some View {
         TabView {
@@ -85,41 +86,85 @@ struct ContentView: View {
 
     private var titleGenerationTab: some View {
         HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("标题生成组件")
-                    .font(.title3.bold())
-                TextEditor(text: $appState.titleSettings.prompt)
-                    .font(.body)
-                    .frame(minHeight: 120)
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.25)))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("标题生成组件")
+                        .font(.title3.bold())
 
-                Stepper("生成数量：\(appState.titleSettings.count)", value: $appState.titleSettings.count, in: 1...50)
-
-                GroupBox("模型设置") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        TextField("模型提供方", text: $appState.titleSettings.provider)
-                        SecureField("API Key", text: $appState.titleSettings.apiKey)
-                        TextField("Base URL", text: $appState.titleSettings.baseURL)
-                        TextField("模型名", text: $appState.titleSettings.model)
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("标题生成 Prompt")
+                            .font(.headline)
+                        TextEditor(text: $appState.titleSettings.generationPrompt)
+                            .font(.body)
+                            .frame(minHeight: 150)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.25)))
                     }
-                    .textFieldStyle(.roundedBorder)
-                }
 
-                HStack {
-                    Button(appState.isGeneratingTitles ? "生成中..." : "生成标题") {
-                        Task { await appState.generateTitles() }
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("标题打分 Prompt")
+                            .font(.headline)
+                        TextEditor(text: $appState.titleSettings.scoringPrompt)
+                            .font(.body)
+                            .frame(minHeight: 130)
+                            .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.gray.opacity(0.25)))
                     }
-                    .disabled(appState.isGeneratingTitles)
 
-                    Button("导入标题库") { importWorkbook(kind: .title) }
-                    Button("导出标题库") { exportWorkbook(kind: .title) }
+                    Stepper("生成数量：\(appState.titleSettings.count)", value: $appState.titleSettings.count, in: 1...50)
+
+                    GroupBox {
+                        DisclosureGroup(isExpanded: $isTitleModelSettingsExpanded) {
+                            VStack(alignment: .leading, spacing: 10) {
+                                Picker("模型提供方", selection: $appState.titleSettings.provider) {
+                                    ForEach(TitleProviderPreset.allCases) { provider in
+                                        Text(provider.displayName).tag(provider)
+                                    }
+                                }
+                                .pickerStyle(.menu)
+                                .onChange(of: appState.titleSettings.provider) { _, _ in
+                                    appState.titleSettings.applyProviderPreset()
+                                }
+
+                                SecureField("API Key（可选）", text: $appState.titleSettings.apiKey)
+                                TextField("Base URL", text: $appState.titleSettings.baseURL)
+                                TextField("模型名", text: $appState.titleSettings.model)
+
+                                Text(appState.titleSettings.provider.summary)
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+
+                                Text("API Key 可以留空；若当前网关允许匿名访问会直接调用，否则自动回退到内置生成和估分。")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                            .textFieldStyle(.roundedBorder)
+                            .padding(.top, 8)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("模型设置")
+                                    .font(.headline)
+                                Text("\(appState.titleSettings.provider.displayName) · \(appState.titleSettings.model.isEmpty ? "未设置模型" : appState.titleSettings.model)")
+                                    .font(.footnote)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+
+                    HStack {
+                        Button(appState.isGeneratingTitles ? "生成中..." : "开始生成") {
+                            Task { await appState.generateTitles() }
+                        }
+                        .disabled(appState.isGeneratingTitles)
+
+                        Button("导入标题库") { importWorkbook(kind: .title) }
+                        Button("导出标题库") { exportWorkbook(kind: .title) }
+                    }
+
+                    Text("执行顺序：先按“标题生成 Prompt”生成标题，再把生成结果串行传给“标题打分 Prompt”进行打分。短标题会按视频号规则自动裁切。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-
-                Text("短标题会自动按视频号规则生成：6-16 字、逗号转空格、移除不支持的特殊符号。")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 6)
             }
             .frame(width: 360)
 
@@ -137,68 +182,75 @@ struct ContentView: View {
 
     private var taskGenerationTab: some View {
         HStack(alignment: .top, spacing: 18) {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("任务单生成组件")
-                    .font(.title3.bold())
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    Text("任务单生成组件")
+                        .font(.title3.bold())
 
-                DatePicker(
-                    "任务日期",
-                    selection: $appState.taskSettings.targetDate,
-                    displayedComponents: .date
-                )
+                    DatePicker(
+                        "任务日期",
+                        selection: $appState.taskSettings.targetDate,
+                        displayedComponents: .date
+                    )
 
-                TextField("视频可用状态", text: $appState.taskSettings.allowedVideoStatus)
-                    .textFieldStyle(.roundedBorder)
-                TextField("标题可用状态", text: $appState.taskSettings.titleStatus)
-                    .textFieldStyle(.roundedBorder)
+                    TextField("视频可用状态", text: $appState.taskSettings.allowedVideoStatus)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("标题可用状态", text: $appState.taskSettings.titleStatus)
+                        .textFieldStyle(.roundedBorder)
 
-                Picker("视频筛选", selection: $appState.taskSettings.popularFilter) {
-                    ForEach(PopularFilter.allCases) { item in
-                        Text(item.rawValue).tag(item)
+                    Picker("视频筛选", selection: $appState.taskSettings.popularFilter) {
+                        ForEach(PopularFilter.allCases) { item in
+                            Text(item.rawValue).tag(item)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
+                    .pickerStyle(.segmented)
 
-                Picker("标题筛选", selection: $appState.taskSettings.titleFilterMode) {
-                    ForEach(TitleFilterMode.allCases) { item in
-                        Text(item.rawValue).tag(item)
+                    Picker("标题筛选", selection: $appState.taskSettings.titleFilterMode) {
+                        ForEach(TitleFilterMode.allCases) { item in
+                            Text(item.rawValue).tag(item)
+                        }
                     }
-                }
-                .pickerStyle(.segmented)
+                    .pickerStyle(.segmented)
 
-                Stepper("爆款分阈值：\(appState.taskSettings.scoreThreshold)", value: $appState.taskSettings.scoreThreshold, in: 0...100)
+                    Stepper("爆款分阈值：\(appState.taskSettings.scoreThreshold)", value: $appState.taskSettings.scoreThreshold, in: 0...100)
 
-                GroupBox("平台计划") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(Array(appState.taskSettings.platformPlans.enumerated()), id: \.element.id) { index, _ in
-                            HStack {
-                                TextField("平台", text: $appState.taskSettings.platformPlans[index].platform)
-                                TextField("账号名称", text: $appState.taskSettings.platformPlans[index].accountName)
-                                TextField("标记原创", text: $appState.taskSettings.platformPlans[index].markOriginal)
+                    GroupBox("平台计划") {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(Array(appState.taskSettings.platformPlans.enumerated()), id: \.element.id) { index, _ in
+                                HStack {
+                                    TextField("平台", text: $appState.taskSettings.platformPlans[index].platform)
+                                    TextField("账号名称", text: $appState.taskSettings.platformPlans[index].accountName)
+                                    TextField("标记原创", text: $appState.taskSettings.platformPlans[index].markOriginal)
+                                }
+                            }
+
+                            Button("新增平台计划") {
+                                appState.taskSettings.platformPlans.append(
+                                    PlatformPlan(platform: "douyin", accountName: "新账号", markOriginal: "是")
+                                )
                             }
                         }
+                        .textFieldStyle(.roundedBorder)
+                    }
 
-                        Button("新增平台计划") {
-                            appState.taskSettings.platformPlans.append(
-                                PlatformPlan(platform: "douyin", accountName: "新账号", markOriginal: "是")
-                            )
+                    GenerationFlowView(settings: appState.taskSettings)
+
+                    HStack {
+                        Button("生成任务单") {
+                            appState.generateTasks()
                         }
+                        Button("导出任务单") { exportWorkbook(kind: .task) }
                     }
-                    .textFieldStyle(.roundedBorder)
+
+                    Text("左侧设置区已改为可滚动，平台计划较多时也能完整查看和编辑。")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
                 }
-
-                GenerationFlowView(settings: appState.taskSettings)
-
-                HStack {
-                    Button("生成任务单") {
-                        appState.generateTasks()
-                    }
-                    Button("导出任务单") { exportWorkbook(kind: .task) }
-                }
-
-                Spacer()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 6)
             }
             .frame(width: 400)
+            .frame(maxHeight: .infinity, alignment: .top)
 
             GroupBox("任务单预览") {
                 Table(appState.taskRecords) {
@@ -310,6 +362,7 @@ struct ContentView: View {
         .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 
+    @MainActor
     private func importWorkbook(kind: WorkbookKind) {
         let panel = NSOpenPanel()
         panel.allowedContentTypes = [.spreadsheet]
@@ -334,6 +387,7 @@ struct ContentView: View {
         }
     }
 
+    @MainActor
     private func exportWorkbook(kind: WorkbookKind) {
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.spreadsheet]

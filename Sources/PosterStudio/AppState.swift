@@ -68,10 +68,11 @@ final class AppState: ObservableObject {
     func generateTitles() async {
         isGeneratingTitles = true
         defer { isGeneratingTitles = false }
+        statusMessage = "正在按 Prompt 生成标题并串行打分..."
 
         do {
             titleRecords = try await TitleGenerationService.generateTitles(settings: titleSettings)
-            statusMessage = "已生成 \(titleRecords.count) 条标题"
+            statusMessage = "已生成 \(titleRecords.count) 条标题，并完成串行打分"
         } catch {
             statusMessage = error.localizedDescription
         }

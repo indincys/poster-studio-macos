@@ -244,6 +244,103 @@ enum TitleFilterMode: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
+enum TitleProviderPreset: String, CaseIterable, Identifiable {
+    case claude
+    case openAI
+    case deepSeek
+    case qwen
+    case kimi
+    case doubao
+    case zai
+    case custom
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .claude:
+            return "Claude"
+        case .openAI:
+            return "OpenAI"
+        case .deepSeek:
+            return "DeepSeek"
+        case .qwen:
+            return "Qwen"
+        case .kimi:
+            return "Kimi"
+        case .doubao:
+            return "Doubao"
+        case .zai:
+            return "Z.ai"
+        case .custom:
+            return "自定义兼容 OpenAI"
+        }
+    }
+
+    var defaultBaseURL: String {
+        switch self {
+        case .claude:
+            return "https://api.anthropic.com/v1"
+        case .openAI:
+            return "https://api.openai.com/v1"
+        case .deepSeek:
+            return "https://api.deepseek.com/v1"
+        case .qwen:
+            return "https://dashscope-intl.aliyuncs.com/compatible-mode/v1"
+        case .kimi:
+            return "https://api.moonshot.cn/v1"
+        case .doubao:
+            return "https://ark.cn-beijing.volces.com/api/v3"
+        case .zai:
+            return "https://api.z.ai/api/paas/v4"
+        case .custom:
+            return ""
+        }
+    }
+
+    var defaultModel: String {
+        switch self {
+        case .claude:
+            return "claude-sonnet-4-6"
+        case .openAI:
+            return "gpt-4.1-mini"
+        case .deepSeek:
+            return "deepseek-chat"
+        case .qwen:
+            return "qwen-max"
+        case .kimi:
+            return "kimi-thinking-preview"
+        case .doubao:
+            return "ep-你的推理接入点ID"
+        case .zai:
+            return "glm-5"
+        case .custom:
+            return ""
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .claude:
+            return "Anthropic 官方 OpenAI 兼容层"
+        case .openAI:
+            return "OpenAI 官方 Chat Completions"
+        case .deepSeek:
+            return "DeepSeek OpenAI 兼容接口"
+        case .qwen:
+            return "阿里云百炼 OpenAI 兼容模式"
+        case .kimi:
+            return "Moonshot Kimi OpenAI 兼容接口"
+        case .doubao:
+            return "火山方舟 Chat Completions，模型通常填 Endpoint ID"
+        case .zai:
+            return "Z.ai Chat Completions 接口"
+        case .custom:
+            return "用于本地网关或其他兼容 OpenAI 的模型服务"
+        }
+    }
+}
+
 struct PlatformPlan: Identifiable, Hashable {
     let id = UUID()
     var platform: String
@@ -252,12 +349,52 @@ struct PlatformPlan: Identifiable, Hashable {
 }
 
 struct TitleGenerationSettings {
-    var prompt: String = "多平台短视频带货标题"
+    var generationPrompt: String = """
+商品：便携保温杯
+卖点：316 不锈钢、轻量、通勤不漏水
+风格：口语化、种草感强、带具体场景
+补充要求：突出“早八通勤”和“办公室久放还保温”
+"""
+    var scoringPrompt: String = """
+请从点击吸引力、信息清晰度、转化潜力三个维度给标题打 0-100 分。
+优先奖励具体、可信、场景感强、利于带货转化的标题。
+分数只保留整数，高分标题要明显优于普通标题。
+"""
     var count: Int = 12
     var apiKey: String = ""
-    var baseURL: String = ""
-    var model: String = ""
-    var provider: String = "自定义兼容 OpenAI"
+    var baseURL: String = TitleProviderPreset.openAI.defaultBaseURL
+    var model: String = TitleProviderPreset.openAI.defaultModel
+    var provider: TitleProviderPreset = .openAI
+
+    var trimmedGenerationPrompt: String {
+        generationPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedScoringPrompt: String {
+        scoringPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedBaseURL: String {
+        baseURL.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedModel: String {
+        model.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var trimmedAPIKey: String {
+        apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    var hasRemoteConfiguration: Bool {
+        !trimmedBaseURL.isEmpty && !trimmedModel.isEmpty
+    }
+
+    mutating func applyProviderPreset() {
+        guard provider != .custom else { return }
+        baseURL = provider.defaultBaseURL
+        model = provider.defaultModel
+    }
 }
 
 struct TaskGenerationSettings {
