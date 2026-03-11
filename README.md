@@ -214,12 +214,29 @@ GitHub Release：
 
 - 推送 `v*` tag 后，工作流 [release.yml](/Users/indincys/Documents/code/poster/.github/workflows/release.yml) 会自动构建并上传 zip 到 Release
 - App 内部通过 GitHub Releases API 检查最新版本，直接下载 `.zip` 并自动替换安装
+- 工作流会在 release 已存在时自动覆盖同名 zip，避免 tag 重跑失败
+
+一键发版：
+
+```bash
+./scripts/release_version.sh 0.1.3
+```
+
+这个脚本会执行：
+
+1. 检查工作区是否干净，避免把未提交改动带进 release
+2. 本地打包 `PosterStudio.app` 和 `PosterStudio-arm64-<version>.zip`
+3. 推送当前分支到 `origin`
+4. 创建并推送 `v<version>` tag
+5. 触发 GitHub Actions 自动创建或更新 Release 资产
+
+发版约束：
+
+- 版本号必须使用 `x.y.z`
+- 发版前先把代码提交到当前分支
+- 应用内更新依赖 GitHub Release 中存在 `.zip` 资产，因此不要手动删除 zip 附件
 
 ## 说明
 
 - 这版 App 只支持 Apple Silicon，编译目标是 `arm64`
-- 目前仓库和发布链路已经准备好，但还没有替你创建远端 GitHub 仓库，也没有替你实际 push release
-- 如果你下一步要我继续，我可以直接做这三件事：
-  1. 把 App 再补一轮界面细节和导入校验
-  2. 初始化 git 并整理首次提交
-  3. 接你指定的 GitHub 仓库名，完成远端创建、push、tag 和首个 release
+- 更新页默认读取官方仓库 `indincys/poster-studio-macos`，发布新 tag 后应用可直接检测更新、下载更新并安装更新
