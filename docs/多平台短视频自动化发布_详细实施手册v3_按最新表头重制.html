@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>多平台短视频自动化发布系统详细实施手册（四表版）</title>
+  <style>
+    :root {
+      --bg: #f5f7fb;
+      --card: #ffffff;
+      --text: #1f2937;
+      --muted: #667085;
+      --line: #d9e2f1;
+      --head: #eaf2ff;
+      --accent: #2563eb;
+      --accent-soft: #eff6ff;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      background: linear-gradient(180deg, #eef4ff 0%, var(--bg) 240px);
+      color: var(--text);
+      font-family: "PingFang SC", "Microsoft YaHei", sans-serif;
+      line-height: 1.72;
+    }
+
+    .page {
+      width: min(1120px, calc(100% - 48px));
+      margin: 32px auto 56px;
+    }
+
+    .hero,
+    .section {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 20px;
+      box-shadow: 0 12px 36px rgba(37, 99, 235, 0.08);
+    }
+
+    .hero {
+      padding: 36px 40px 30px;
+      margin-bottom: 18px;
+    }
+
+    .hero h1 {
+      margin: 0 0 10px;
+      font-size: 34px;
+      line-height: 1.2;
+      color: #0f172a;
+    }
+
+    .hero .meta {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .hero .lead {
+      margin: 18px 0 0;
+      padding: 16px 18px;
+      border-radius: 14px;
+      background: var(--accent-soft);
+      color: #1e3a8a;
+    }
+
+    .section {
+      padding: 28px 32px;
+      margin-top: 18px;
+    }
+
+    h2 {
+      margin: 0 0 14px;
+      font-size: 24px;
+      color: #0f172a;
+    }
+
+    h3 {
+      margin: 24px 0 10px;
+      font-size: 18px;
+      color: #0f172a;
+    }
+
+    p {
+      margin: 10px 0;
+    }
+
+    ul,
+    ol {
+      margin: 10px 0 10px 22px;
+      padding: 0;
+    }
+
+    li {
+      margin: 6px 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 14px 0 20px;
+    }
+
+    th,
+    td {
+      border: 1px solid var(--line);
+      padding: 10px 12px;
+      text-align: left;
+      vertical-align: top;
+    }
+
+    th {
+      background: var(--head);
+      color: #0f172a;
+      font-weight: 700;
+    }
+
+    code {
+      padding: 2px 6px;
+      border-radius: 6px;
+      background: #f3f4f6;
+      font-family: "SFMono-Regular", "Menlo", monospace;
+      font-size: 0.95em;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .mini-card {
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+      background: #fbfdff;
+    }
+
+    .mini-card strong {
+      display: block;
+      margin-bottom: 6px;
+      color: #0f172a;
+    }
+
+    .note {
+      margin-top: 14px;
+      padding: 14px 16px;
+      border-left: 4px solid var(--accent);
+      background: var(--accent-soft);
+      border-radius: 12px;
+      color: #1e3a8a;
+    }
+
+    .small {
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    @media (max-width: 860px) {
+      .page {
+        width: calc(100% - 24px);
+        margin: 16px auto 32px;
+      }
+
+      .hero,
+      .section {
+        padding: 22px 18px;
+        border-radius: 16px;
+      }
+
+      .hero h1 {
+        font-size: 28px;
+      }
+
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <section class="hero">
+      <h1>多平台短视频自动化发布系统详细实施手册</h1>
+      <p class="meta">四表版 HTML 文档</p>
+      <p class="meta">整理日期：2026年3月12日</p>
+      <div class="lead">
+        本手册仅基于当前实际使用的四张表编写：视频库、标签库、标题库、任务单。
+      </div>
+    </section>
+
+    <section class="section">
+      <h2>一、系统总览</h2>
+      <p>这套系统的目标，是把多平台短视频发布流程拆成清晰的四层数据结构：</p>
+      <div class="grid">
+        <div class="mini-card">
+          <strong>视频库</strong>
+          维护每条待发布视频的基础信息、排期信息和平台补充字段，是任务生成的核心输入表。
+        </div>
+        <div class="mini-card">
+          <strong>标签库</strong>
+          按 SKU 维护标签模板，供任务单自动匹配标签。
+        </div>
+        <div class="mini-card">
+          <strong>标题库</strong>
+          维护标题候选池，记录使用状态、使用次数、爆款分和视频号短标题。
+        </div>
+        <div class="mini-card">
+          <strong>任务单</strong>
+          汇总发布执行所需字段，供 RPA 或人工发布直接使用。
+        </div>
+      </div>
+      <p class="note">当前结构只有四个表。逻辑上是：视频库提供视频与排期，标签库提供标签，标题库提供标题，最终合并生成任务单。</p>
+    </section>
+
+    <section class="section">
+      <h2>二、四张表清单</h2>
+      <table>
+        <tr>
+          <th>文件</th>
+          <th>工作表</th>
+          <th>用途</th>
+          <th>维护方式</th>
+        </tr>
+        <tr>
+          <td><code>data/video_library.xlsx</code></td>
+          <td>视频库</td>
+          <td>视频主数据与排期输入</td>
+          <td>人工维护或由业务流程同步维护</td>
+        </tr>
+        <tr>
+          <td><code>data/tag_library.xlsx</code></td>
+          <td>标签库</td>
+          <td>SKU 标签配置</td>
+          <td>人工维护</td>
+        </tr>
+        <tr>
+          <td><code>data/title_library.xlsx</code></td>
+          <td>标题库</td>
+          <td>标题候选池</td>
+          <td>脚本生成 + 人工筛选</td>
+        </tr>
+        <tr>
+          <td><code>output/tasks_YYYY-MM-DD.xlsx</code></td>
+          <td>任务单</td>
+          <td>每日发布执行表</td>
+          <td>脚本生成，执行端读取</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>三、视频库</h2>
+      <p><strong>文件：</strong><code>data/video_library.xlsx</code></p>
+      <p><strong>工作表：</strong>视频库</p>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>说明</th>
+          <th>填写建议</th>
+        </tr>
+        <tr>
+          <td>视频文件名</td>
+          <td>视频文件本身的名称，方便人工核对和任务单展示。</td>
+          <td>建议与实际文件名完全一致。</td>
+        </tr>
+        <tr>
+          <td>视频路径</td>
+          <td>视频文件完整路径，执行端可直接读取并上传。</td>
+          <td>建议使用绝对路径。</td>
+        </tr>
+        <tr>
+          <td>封面路径</td>
+          <td>封面文件完整路径，用于平台上传封面。</td>
+          <td>没有封面时可留空，但建议统一维护。</td>
+        </tr>
+        <tr>
+          <td>SKU编码</td>
+          <td>连接标签库和任务单的核心主键。</td>
+          <td>必须稳定且唯一映射到具体款式。</td>
+        </tr>
+        <tr>
+          <td>SKU款式</td>
+          <td>视频对应的商品款式名。</td>
+          <td>建议使用统一的业务命名方式。</td>
+        </tr>
+        <tr>
+          <td>使用状态</td>
+          <td>控制该视频是否参与任务生成。</td>
+          <td>建议统一口径，如 <code>待发布</code>、<code>已生成任务</code>、<code>暂停</code>。</td>
+        </tr>
+        <tr>
+          <td>发布日期</td>
+          <td>该视频计划在哪一天发布。</td>
+          <td>统一使用 <code>YYYY-MM-DD</code>。</td>
+        </tr>
+        <tr>
+          <td>发布时间</td>
+          <td>该视频在当天的计划发布时间。</td>
+          <td>统一使用 <code>HH:MM</code> 24 小时制。</td>
+        </tr>
+        <tr>
+          <td>小黄车标题</td>
+          <td>抖音任务使用的小黄车标题。</td>
+          <td>建议填写适合抖音挂车展示的商品短标题。</td>
+        </tr>
+        <tr>
+          <td>看后搜小蓝词（抖音）</td>
+          <td>抖音场景下可用于搜索引导的补充词。</td>
+          <td>建议填写 1 个短词或短语。</td>
+        </tr>
+        <tr>
+          <td>位置信息（视频号）</td>
+          <td>视频号任务使用的位置信息。</td>
+          <td>需要视频号带位置时再填写。</td>
+        </tr>
+        <tr>
+          <td>热门款</td>
+          <td>标记该视频是否属于重点优先款。</td>
+          <td>建议统一使用 <code>是</code> / <code>否</code>。</td>
+        </tr>
+      </table>
+      <div class="note">视频库是当前四表结构中的主输入表。任务日期、发布时间、视频路径、封面路径、SKU 信息、平台专用字段，都会从这里进入任务单。</div>
+    </section>
+
+    <section class="section">
+      <h2>四、标签库</h2>
+      <p><strong>文件：</strong><code>data/tag_library.xlsx</code></p>
+      <p><strong>工作表：</strong>标签库</p>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>说明</th>
+          <th>填写建议</th>
+        </tr>
+        <tr>
+          <td>SKU编码</td>
+          <td>与视频库、任务单关联的关键字段。</td>
+          <td>每个 SKU 建议只保留一行。</td>
+        </tr>
+        <tr>
+          <td>SKU款式名</td>
+          <td>标签所属的款式名称，供人工核对。</td>
+          <td>建议与视频库中的 SKU款式 保持一致。</td>
+        </tr>
+        <tr>
+          <td>标签1</td>
+          <td>主标签。</td>
+          <td>建议放最核心的商品标签。</td>
+        </tr>
+        <tr>
+          <td>标签2</td>
+          <td>补充标签。</td>
+          <td>可填写场景或人群标签。</td>
+        </tr>
+        <tr>
+          <td>标签3</td>
+          <td>补充标签。</td>
+          <td>可填写卖点或分类标签。</td>
+        </tr>
+        <tr>
+          <td>标签4</td>
+          <td>补充标签。</td>
+          <td>按实际投放需求维护。</td>
+        </tr>
+        <tr>
+          <td>标签5</td>
+          <td>补充标签。</td>
+          <td>不需要时可留空。</td>
+        </tr>
+      </table>
+      <p>标签库的作用很单纯：按 <code>SKU编码</code> 找到对应标签组，然后把标签 1 到标签 5 带进任务单。</p>
+    </section>
+
+    <section class="section">
+      <h2>五、标题库</h2>
+      <p><strong>文件：</strong><code>data/title_library.xlsx</code></p>
+      <p><strong>工作表：</strong>标题库</p>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>说明</th>
+          <th>填写建议</th>
+        </tr>
+        <tr>
+          <td>标题</td>
+          <td>默认发布标题，任务单中的标题主要从这里选取。</td>
+          <td>建议偏转化和种草，不要过长。</td>
+        </tr>
+        <tr>
+          <td>使用状态</td>
+          <td>控制标题是否参与任务生成。</td>
+          <td>建议统一使用 <code>可用</code>、<code>停用</code> 等状态。</td>
+        </tr>
+        <tr>
+          <td>使用次数</td>
+          <td>记录标题被用过多少次。</td>
+          <td>生成任务单后建议自动加 1。</td>
+        </tr>
+        <tr>
+          <td>爆款分</td>
+          <td>标题优先级评分，决定优先使用顺序。</td>
+          <td>建议统一按 0-100 分维护。</td>
+        </tr>
+        <tr>
+          <td>短标题（视频号）</td>
+          <td>适用于视频号等更适合短标题的平台。</td>
+          <td>建议控制在 6-16 字左右。</td>
+        </tr>
+      </table>
+      <p>标题库的推荐选取顺序为：先过滤 <code>使用状态</code>，再按 <code>使用次数</code> 从低到高排序，在同等条件下优先使用 <code>爆款分</code> 更高的标题。</p>
+    </section>
+
+    <section class="section">
+      <h2>六、任务单</h2>
+      <p><strong>文件：</strong><code>output/tasks_YYYY-MM-DD.xlsx</code></p>
+      <p><strong>工作表：</strong>任务单</p>
+      <table>
+        <tr>
+          <th>字段</th>
+          <th>说明</th>
+          <th>来源建议</th>
+        </tr>
+        <tr>
+          <td>任务ID</td>
+          <td>任务唯一编号。</td>
+          <td>由脚本自动生成，如 <code>TASK-0001</code>。</td>
+        </tr>
+        <tr>
+          <td>任务日期</td>
+          <td>该条任务所属日期。</td>
+          <td>来自视频库的 <code>发布日期</code>。</td>
+        </tr>
+        <tr>
+          <td>定时发布时间</td>
+          <td>平台后台要设置的具体发布时间。</td>
+          <td>来自视频库的 <code>发布时间</code>。</td>
+        </tr>
+        <tr>
+          <td>发布平台</td>
+          <td>任务对应的平台。</td>
+          <td>来自任务生成配置。</td>
+        </tr>
+        <tr>
+          <td>账号名称</td>
+          <td>该平台下具体执行发布的账号。</td>
+          <td>来自任务生成配置。</td>
+        </tr>
+        <tr>
+          <td>SKU款式名</td>
+          <td>任务单展示用款式名。</td>
+          <td>通常来自视频库的 <code>SKU款式</code>。</td>
+        </tr>
+        <tr>
+          <td>SKU编码</td>
+          <td>任务关联主键。</td>
+          <td>来自视频库。</td>
+        </tr>
+        <tr>
+          <td>商品名称</td>
+          <td>发布侧展示用商品名称。</td>
+          <td>当前四表结构没有独立商品名称字段时，可默认与 <code>SKU款式名</code> 保持一致。</td>
+        </tr>
+        <tr>
+          <td>视频文件名</td>
+          <td>视频文件名。</td>
+          <td>来自视频库。</td>
+        </tr>
+        <tr>
+          <td>视频路径</td>
+          <td>执行端直接读取并上传的视频路径。</td>
+          <td>来自视频库。</td>
+        </tr>
+        <tr>
+          <td>封面路径</td>
+          <td>执行端直接读取并上传的封面路径。</td>
+          <td>来自视频库。</td>
+        </tr>
+        <tr>
+          <td>标题</td>
+          <td>最终发布标题。</td>
+          <td>来自标题库。</td>
+        </tr>
+        <tr>
+          <td>标签1</td>
+          <td>发布标签。</td>
+          <td>来自标签库。</td>
+        </tr>
+        <tr>
+          <td>标签2</td>
+          <td>发布标签。</td>
+          <td>来自标签库。</td>
+        </tr>
+        <tr>
+          <td>标签3</td>
+          <td>发布标签。</td>
+          <td>来自标签库。</td>
+        </tr>
+        <tr>
+          <td>标签4</td>
+          <td>发布标签。</td>
+          <td>来自标签库。</td>
+        </tr>
+        <tr>
+          <td>标签5</td>
+          <td>发布标签。</td>
+          <td>来自标签库。</td>
+        </tr>
+        <tr>
+          <td>标记原创</td>
+          <td>平台发布时的原创标记。</td>
+          <td>来自任务生成配置，通常默认是 <code>是</code>。</td>
+        </tr>
+        <tr>
+          <td>小黄车标题（抖音）</td>
+          <td>仅抖音任务需要使用的字段。</td>
+          <td>来自视频库的 <code>小黄车标题</code>。</td>
+        </tr>
+        <tr>
+          <td>位置信息</td>
+          <td>视频号等需要位置的任务字段。</td>
+          <td>来自视频库的 <code>位置信息（视频号）</code>。</td>
+        </tr>
+        <tr>
+          <td>任务状态</td>
+          <td>任务执行状态。</td>
+          <td>建议使用 <code>待执行</code>、<code>执行中</code>、<code>已完成</code>、<code>失败</code>。</td>
+        </tr>
+      </table>
+      <div class="note">任务单是最终执行文件。RPA 或人工发布不需要再回头读取前三张表，只需要稳定读取任务单即可。</div>
+    </section>
+
+    <section class="section">
+      <h2>七、四张表之间的关系</h2>
+      <table>
+        <tr>
+          <th>关系</th>
+          <th>说明</th>
+        </tr>
+        <tr>
+          <td>视频库 → 标签库</td>
+          <td>通过 <code>SKU编码</code> 关联，取出标签 1 到标签 5。</td>
+        </tr>
+        <tr>
+          <td>视频库 → 标题库</td>
+          <td>视频库提供待发布视频，标题库提供可用标题池。</td>
+        </tr>
+        <tr>
+          <td>视频库 + 标签库 + 标题库 → 任务单</td>
+          <td>三张输入表按规则合并，生成最终发布任务。</td>
+        </tr>
+        <tr>
+          <td>任务单 → 执行端</td>
+          <td>任务单交给 RPA 或人工发布流程读取并执行。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>八、任务单生成逻辑</h2>
+      <ol>
+        <li>读取视频库，先按 <code>发布日期</code>、<code>使用状态</code>、<code>热门款</code> 等条件筛选视频。</li>
+        <li>读取标题库，先按 <code>使用状态</code> 过滤，再按 <code>使用次数</code> 和 <code>爆款分</code> 选择标题。</li>
+        <li>读取标签库，按 <code>SKU编码</code> 匹配标签 1 到标签 5。</li>
+        <li>按平台计划展开任务，一条视频可以生成多个平台任务。</li>
+        <li>生成任务单时，同时带出平台专用字段：
+          <ul>
+            <li>抖音使用 <code>小黄车标题（抖音）</code></li>
+            <li>视频号使用 <code>位置信息</code></li>
+          </ul>
+        </li>
+        <li>生成完成后，可按配置回写：
+          <ul>
+            <li>视频库中的 <code>使用状态</code> 更新为 <code>已生成任务</code></li>
+            <li>标题库中的 <code>使用次数</code> 自动加 1</li>
+          </ul>
+        </li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>九、字段维护建议</h2>
+      <table>
+        <tr>
+          <th>表</th>
+          <th>重点维护字段</th>
+          <th>建议</th>
+        </tr>
+        <tr>
+          <td>视频库</td>
+          <td>使用状态、发布日期、发布时间、SKU编码、平台专用字段</td>
+          <td>这张表最容易影响任务单结果，建议每日检查。</td>
+        </tr>
+        <tr>
+          <td>标签库</td>
+          <td>SKU编码、标签1-标签5</td>
+          <td>只要 SKU 变了或标签策略调整，就需要同步更新。</td>
+        </tr>
+        <tr>
+          <td>标题库</td>
+          <td>使用状态、使用次数、爆款分、短标题（视频号）</td>
+          <td>建议定期补充新标题，淘汰不再使用的标题。</td>
+        </tr>
+        <tr>
+          <td>任务单</td>
+          <td>任务状态</td>
+          <td>执行完成后应及时回写状态，方便追踪结果。</td>
+        </tr>
+      </table>
+    </section>
+
+    <section class="section">
+      <h2>十、每日执行流程</h2>
+      <ol>
+        <li>更新视频库，确认当天要发的视频、日期、时间、状态和平台补充字段都已填写。</li>
+        <li>更新标签库，确认每个参与发布的 SKU 都有完整标签。</li>
+        <li>更新标题库，确认有足够的可用标题，且使用次数和爆款分正常。</li>
+        <li>运行任务生成脚本，产出当日任务单。</li>
+        <li>抽查任务单中的平台、账号、标题、标签、路径和发布时间。</li>
+        <li>将任务单交给 RPA 或人工执行发布。</li>
+        <li>发布完成后回写任务状态，并根据需要同步更新视频库与标题库。</li>
+      </ol>
+    </section>
+
+    <section class="section">
+      <h2>十一、结论</h2>
+      <p>当前版本的系统结构可以概括为一句话：</p>
+      <p><strong>视频库管视频与排期，标签库管标签，标题库管标题，任务单管执行。</strong></p>
+      <p>只要这四张表的字段和口径保持稳定，任务生成和自动发布流程就能持续运行。</p>
+      <p class="small">本手册仅基于当前四张表结构编写。</p>
+    </section>
+  </div>
+</body>
+</html>
