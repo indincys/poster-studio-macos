@@ -55,6 +55,7 @@ enum TaskGenerationService {
                         videoPath: video.videoPath,
                         coverPath: video.coverPath,
                         title: title?.title ?? "",
+                        shortTitleWechat: plan.platform == "shipinhao" ? (title?.shortTitleWechat ?? "") : "",
                         tag1: tag?.tag1 ?? "",
                         tag2: tag?.tag2 ?? "",
                         tag3: tag?.tag3 ?? "",
@@ -62,6 +63,7 @@ enum TaskGenerationService {
                         tag5: tag?.tag5 ?? "",
                         markOriginal: plan.markOriginal,
                         yellowCartTitleDouyin: plan.platform == "douyin" ? video.yellowCartTitle : "",
+                        blueSearchTermDouyin: plan.platform == "douyin" ? video.blueSearchTerm : "",
                         location: plan.platform == "shipinhao" ? video.locationWechat : "",
                         taskStatus: "待执行"
                     )

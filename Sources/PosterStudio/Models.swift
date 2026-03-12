@@ -91,6 +91,7 @@ let taskHeaders = [
     WorkbookColumn.videoPath,
     WorkbookColumn.coverPath,
     WorkbookColumn.title,
+    WorkbookColumn.shortTitleWechat,
     WorkbookColumn.tag1,
     WorkbookColumn.tag2,
     WorkbookColumn.tag3,
@@ -98,6 +99,7 @@ let taskHeaders = [
     WorkbookColumn.tag5,
     WorkbookColumn.markOriginal,
     WorkbookColumn.yellowCartTitleDouyin,
+    WorkbookColumn.blueSearchTerm,
     WorkbookColumn.location,
     WorkbookColumn.taskStatus,
 ]
@@ -191,6 +193,7 @@ struct TaskRecord: Identifiable, Hashable {
     var videoPath: String
     var coverPath: String
     var title: String
+    var shortTitleWechat: String
     var tag1: String
     var tag2: String
     var tag3: String
@@ -198,6 +201,7 @@ struct TaskRecord: Identifiable, Hashable {
     var tag5: String
     var markOriginal: String
     var yellowCartTitleDouyin: String
+    var blueSearchTermDouyin: String
     var location: String
     var taskStatus: String
 
@@ -215,6 +219,7 @@ struct TaskRecord: Identifiable, Hashable {
             videoPath,
             coverPath,
             title,
+            shortTitleWechat,
             tag1,
             tag2,
             tag3,
@@ -222,6 +227,7 @@ struct TaskRecord: Identifiable, Hashable {
             tag5,
             markOriginal,
             yellowCartTitleDouyin,
+            blueSearchTermDouyin,
             location,
             taskStatus,
         ]

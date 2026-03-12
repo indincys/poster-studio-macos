@@ -22,6 +22,7 @@ final class AppState: ObservableObject {
     @Published var statusMessage = "准备就绪"
     @Published var updateStatusMessage = "应用已绑定官方 GitHub Release，可直接检查更新"
     @Published var isGeneratingTitles = false
+    @Published var isGeneratingTasks = false
     @Published var isCheckingUpdate = false
     @Published var isInstallingUpdate = false
 
@@ -79,6 +80,9 @@ final class AppState: ObservableObject {
     }
 
     func generateTasks() {
+        isGeneratingTasks = true
+        defer { isGeneratingTasks = false }
+
         var mutableVideos = videoRecords
         var mutableTitles = titleRecords
         taskRecords = TaskGenerationService.generateTasks(
@@ -89,7 +93,12 @@ final class AppState: ObservableObject {
         )
         videoRecords = mutableVideos
         titleRecords = mutableTitles
-        statusMessage = "已生成 \(taskRecords.count) 条任务"
+
+        if taskRecords.isEmpty {
+            statusMessage = "未匹配到符合条件的视频，请检查日期和筛选条件"
+        } else {
+            statusMessage = "已生成 \(taskRecords.count) 条任务"
+        }
     }
 
     func checkForUpdate() async {

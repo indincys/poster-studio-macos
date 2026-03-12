@@ -221,6 +221,13 @@ struct ContentView: View {
                                     TextField("平台", text: $appState.taskSettings.platformPlans[index].platform)
                                     TextField("账号名称", text: $appState.taskSettings.platformPlans[index].accountName)
                                     TextField("标记原创", text: $appState.taskSettings.platformPlans[index].markOriginal)
+                                    Button(role: .destructive) {
+                                        appState.taskSettings.platformPlans.remove(at: index)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                    }
+                                    .buttonStyle(.borderless)
+                                    .disabled(appState.taskSettings.platformPlans.count <= 1)
                                 }
                             }
 
@@ -236,10 +243,12 @@ struct ContentView: View {
                     GenerationFlowView(settings: appState.taskSettings)
 
                     HStack {
-                        Button("生成任务单") {
+                        Button(appState.isGeneratingTasks ? "生成中..." : "生成任务单") {
                             appState.generateTasks()
                         }
+                        .disabled(appState.isGeneratingTasks)
                         Button("导出任务单") { exportWorkbook(kind: .task) }
+                            .disabled(appState.taskRecords.isEmpty)
                     }
 
                     Text("左侧设置区已改为可滚动，平台计划较多时也能完整查看和编辑。")
@@ -259,6 +268,8 @@ struct ContentView: View {
                     TableColumn("账号名称", value: \.accountName)
                     TableColumn("SKU款式名", value: \.skuStyleName)
                     TableColumn("标题", value: \.title)
+                    TableColumn("短标题", value: \.shortTitleWechat)
+                    TableColumn("看后搜", value: \.blueSearchTermDouyin)
                     TableColumn("定时发布时间", value: \.scheduledTime)
                     TableColumn("任务状态", value: \.taskStatus)
                 }

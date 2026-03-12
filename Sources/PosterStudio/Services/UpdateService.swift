@@ -114,10 +114,7 @@ enum UpdateService {
             throw UpdateServiceError.installFailed
         }
 
-        await MainActor.run {
-            NSApplication.shared.terminate(nil)
-        }
-
+        // launchInstaller already triggers terminate — no duplicate call needed.
         return targetAppURL
     }
 
