@@ -72,11 +72,27 @@ cat > "${APP_DIR}/Contents/Info.plist" <<EOF
   <string>14.0</string>
   <key>NSHighResolutionCapable</key>
   <true/>
+  <key>NSAppTransportSecurity</key>
+  <dict>
+    <key>NSAllowsArbitraryLoads</key>
+    <true/>
+  </dict>
 </dict>
 </plist>
 EOF
 
-codesign --force --deep --sign - "${APP_DIR}" >/dev/null 2>&1 || true
+cat > "${APP_DIR}/Contents/entitlements.plist" <<ENTEOF
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>com.apple.security.network.client</key>
+  <true/>
+</dict>
+</plist>
+ENTEOF
+
+codesign --force --deep --sign - --entitlements "${APP_DIR}/Contents/entitlements.plist" "${APP_DIR}" >/dev/null 2>&1 || true
 ditto -c -k --sequesterRsrc --keepParent "${APP_DIR}" "${DIST_DIR}/${APP_NAME}-arm64-${VERSION}.zip"
 
 echo "Created ${DIST_DIR}/${APP_NAME}-arm64-${VERSION}.zip"

@@ -3,7 +3,8 @@ import Foundation
 
 enum UpdateServiceError: LocalizedError {
     case missingRepository
-    case invalidResponse
+    case httpError(Int, String)
+    case decodingFailed(String)
     case missingInstallAsset
     case unsupportedInstallationTarget
     case downloadFailed
@@ -15,8 +16,10 @@ enum UpdateServiceError: LocalizedError {
         switch self {
         case .missingRepository:
             return "请先填写 GitHub 仓库 owner 和 repo"
-        case .invalidResponse:
-            return "更新接口返回格式无效"
+        case .httpError(let status, let detail):
+            return "GitHub API 返回 HTTP \(status)：\(detail)"
+        case .decodingFailed(let detail):
+            return "解析 GitHub Release 失败：\(detail)"
         case .missingInstallAsset:
             return "最新 Release 没有可安装的 .zip 资产"
         case .unsupportedInstallationTarget:
@@ -58,20 +61,40 @@ enum UpdateService {
         }
 
         guard let url = URL(string: "https://api.github.com/repos/\(owner)/\(repo)/releases/latest") else {
-            throw UpdateServiceError.invalidResponse
+            throw UpdateServiceError.httpError(0, "无法构建 API URL")
         }
 
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
+        request.setValue("PosterStudio/\(installedVersion())", forHTTPHeaderField: "User-Agent")
 
         let (data, response) = try await URLSession.shared.data(for: request)
-        guard let httpResponse = response as? HTTPURLResponse, 200..<300 ~= httpResponse.statusCode else {
-            throw UpdateServiceError.invalidResponse
+        guard let httpResponse = response as? HTTPURLResponse else {
+            throw UpdateServiceError.httpError(0, "无法获取 HTTP 响应")
         }
 
-        let release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+        guard 200..<300 ~= httpResponse.statusCode else {
+            let body = String(data: data, encoding: .utf8) ?? ""
+            let detail: String
+            if httpResponse.statusCode == 404 {
+                detail = "仓库 \(owner)/\(repo) 不存在或没有 Release"
+            } else if httpResponse.statusCode == 403 {
+                detail = "API 速率限制，请稍后再试"
+            } else {
+                detail = body.prefix(200).description
+            }
+            throw UpdateServiceError.httpError(httpResponse.statusCode, detail)
+        }
+
+        let release: GitHubRelease
+        do {
+            release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+        } catch {
+            throw UpdateServiceError.decodingFailed(error.localizedDescription)
+        }
+
         guard let pageURL = URL(string: release.htmlURL) else {
-            throw UpdateServiceError.invalidResponse
+            throw UpdateServiceError.decodingFailed("html_url 无效")
         }
 
         let asset = installAsset(from: release.assets)
