@@ -5,27 +5,52 @@ import UniformTypeIdentifiers
 struct ContentView: View {
     @ObservedObject var appState: AppState
     @State private var isTitleModelSettingsExpanded = false
+    @State private var activeSheet: ActiveSheet?
+    @State private var titleSelection = Set<TitleRecord.ID>()
+    @State private var taskSelection = Set<TaskRecord.ID>()
 
     var body: some View {
         TabView {
             librariesTab
                 .tabItem { Text("数据源") }
-
             titleGenerationTab
                 .tabItem { Text("标题生成") }
-
             taskGenerationTab
                 .tabItem { Text("任务单生成") }
-
-            updateTab
-                .tabItem { Text("更新") }
         }
         .padding(18)
         .frame(minWidth: 1180, minHeight: 780)
         .task {
             await appState.performInitialUpdateCheckIfNeeded()
         }
+        .sheet(item: $activeSheet) { sheet in
+            sheetContent(for: sheet)
+        }
     }
+
+    // MARK: - Sheet Router
+
+    @ViewBuilder
+    private func sheetContent(for sheet: ActiveSheet) -> some View {
+        switch sheet {
+        case .libraryDetail(let kind):
+            LibraryDetailView(kind: kind, appState: appState)
+        case .editTitle(let record):
+            TitleEditSheet(draft: record) { updated in
+                if let i = appState.titleRecords.firstIndex(where: { $0.id == updated.id }) {
+                    appState.titleRecords[i] = updated
+                }
+            }
+        case .editTask(let record):
+            TaskEditSheet(draft: record) { updated in
+                if let i = appState.taskRecords.firstIndex(where: { $0.id == updated.id }) {
+                    appState.taskRecords[i] = updated
+                }
+            }
+        }
+    }
+
+    // MARK: - Libraries Tab
 
     private var librariesTab: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -39,13 +64,28 @@ struct ContentView: View {
                 Spacer()
                 Text(appState.statusMessage)
                     .foregroundStyle(.secondary)
+                SettingsLink {
+                    Image(systemName: "gear")
+                        .foregroundStyle(.secondary)
+                        .font(.title3)
+                }
+                .buttonStyle(.plain)
+                .help("设置 (⌘,)")
             }
 
             HStack(spacing: 16) {
-                summaryCard(title: "视频库", value: "\(appState.videoRecords.count) 条", color: .orange)
-                summaryCard(title: "标签库", value: "\(appState.tagRecords.count) 条", color: .green)
-                summaryCard(title: "标题库", value: "\(appState.titleRecords.count) 条", color: .blue)
-                summaryCard(title: "任务单", value: "\(appState.taskRecords.count) 条", color: .pink)
+                summaryCardButton(title: "视频库", value: "\(appState.videoRecords.count) 条", color: .orange) {
+                    activeSheet = .libraryDetail(.video)
+                }
+                summaryCardButton(title: "标签库", value: "\(appState.tagRecords.count) 条", color: .green) {
+                    activeSheet = .libraryDetail(.tag)
+                }
+                summaryCardButton(title: "标题库", value: "\(appState.titleRecords.count) 条", color: .blue) {
+                    activeSheet = .libraryDetail(.title)
+                }
+                summaryCardButton(title: "任务单", value: "\(appState.taskRecords.count) 条", color: .pink) {
+                    activeSheet = .libraryDetail(.task)
+                }
             }
 
             HStack(spacing: 12) {
@@ -56,9 +96,10 @@ struct ContentView: View {
                 Button("导入标题库") { importWorkbook(kind: .title) }
                 Button("导出标题库") { exportWorkbook(kind: .title) }
                 Button("导出任务单") { exportWorkbook(kind: .task) }
+                    .disabled(appState.taskRecords.isEmpty)
             }
 
-            GroupBox("视频库预览") {
+            GroupBox("视频库预览（点击上方卡片查看完整内容）") {
                 Table(appState.videoRecords) {
                     TableColumn("视频文件名", value: \.videoFileName)
                     TableColumn("SKU编码", value: \.skuCode)
@@ -83,6 +124,8 @@ struct ContentView: View {
             }
         }
     }
+
+    // MARK: - Title Generation Tab
 
     private var titleGenerationTab: some View {
         HStack(alignment: .top, spacing: 18) {
@@ -159,7 +202,7 @@ struct ContentView: View {
                         Button("导出标题库") { exportWorkbook(kind: .title) }
                     }
 
-                    Text("执行顺序：先按“标题生成 Prompt”生成标题，再把生成结果串行传给“标题打分 Prompt”进行打分。短标题会按视频号规则自动裁切。")
+                    Text("右键标题可编辑或删除，双击直接进入编辑。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -169,16 +212,43 @@ struct ContentView: View {
             .frame(width: 360)
 
             GroupBox("标题库预览") {
-                Table(appState.titleRecords) {
+                Table(appState.titleRecords, selection: $titleSelection) {
                     TableColumn("标题", value: \.title)
                     TableColumn("使用状态", value: \.useStatus)
                     TableColumn("使用次数") { record in Text("\(record.useCount)") }
                     TableColumn("爆款分") { record in Text("\(record.hotScore)") }
                     TableColumn("短标题（视频号）", value: \.shortTitleWechat)
                 }
+                .contextMenu(forSelectionType: TitleRecord.ID.self) { selectedIDs in
+                    titleContextMenuItems(for: selectedIDs)
+                } primaryAction: { selectedIDs in
+                    if let id = selectedIDs.first,
+                       let record = appState.titleRecords.first(where: { $0.id == id }) {
+                        activeSheet = .editTitle(record)
+                    }
+                }
             }
         }
     }
+
+    @ViewBuilder
+    private func titleContextMenuItems(for selectedIDs: Set<TitleRecord.ID>) -> some View {
+        if let id = selectedIDs.first,
+           let record = appState.titleRecords.first(where: { $0.id == id }) {
+            Button("编辑") {
+                activeSheet = .editTitle(record)
+            }
+        }
+        if !selectedIDs.isEmpty {
+            Divider()
+            Button("删除所选 (\(selectedIDs.count))", role: .destructive) {
+                appState.titleRecords.removeAll { selectedIDs.contains($0.id) }
+                titleSelection = []
+            }
+        }
+    }
+
+    // MARK: - Task Generation Tab
 
     private var taskGenerationTab: some View {
         HStack(alignment: .top, spacing: 18) {
@@ -251,7 +321,7 @@ struct ContentView: View {
                             .disabled(appState.taskRecords.isEmpty)
                     }
 
-                    Text("左侧设置区已改为可滚动，平台计划较多时也能完整查看和编辑。")
+                    Text("右键任务可编辑或删除，双击直接进入编辑。")
                         .font(.footnote)
                         .foregroundStyle(.secondary)
                 }
@@ -262,7 +332,7 @@ struct ContentView: View {
             .frame(maxHeight: .infinity, alignment: .top)
 
             GroupBox("任务单预览") {
-                Table(appState.taskRecords) {
+                Table(appState.taskRecords, selection: $taskSelection) {
                     TableColumn("任务ID", value: \.taskID)
                     TableColumn("平台", value: \.publishPlatform)
                     TableColumn("账号名称", value: \.accountName)
@@ -273,104 +343,52 @@ struct ContentView: View {
                     TableColumn("定时发布时间", value: \.scheduledTime)
                     TableColumn("任务状态", value: \.taskStatus)
                 }
-            }
-        }
-    }
-
-    private var updateTab: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("GitHub 发布与更新")
-                .font(.title3.bold())
-
-            Text("应用默认指向官方 GitHub Releases，可直接检查最新版本、打开发布页，并下载 `.zip` 安装包自动替换当前应用。")
-                .foregroundStyle(.secondary)
-
-            HStack {
-                TextField("GitHub Owner", text: $appState.updateSettings.repoOwner)
-                TextField("Repo Name", text: $appState.updateSettings.repoName)
-            }
-            .textFieldStyle(.roundedBorder)
-
-            HStack {
-                Button(appState.isCheckingUpdate ? "检查中..." : "手动检查更新") {
-                    Task { await appState.checkForUpdate() }
-                }
-                .disabled(appState.isCheckingUpdate || appState.isInstallingUpdate || !appState.updateSettings.hasRepository)
-
-                Button("恢复官方仓库") {
-                    appState.restoreOfficialUpdateRepository()
-                }
-                .disabled(appState.isCheckingUpdate || appState.isInstallingUpdate)
-
-                if let releasesPageURL = appState.updateSettings.releasesPageURL {
-                    Link("打开 Releases 页面", destination: releasesPageURL)
-                }
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("当前版本：\(appState.currentVersion)")
-                Text(appState.updateStatusMessage)
-                    .foregroundStyle(.secondary)
-            }
-
-            if let release = appState.latestRelease {
-                GroupBox("最新发布") {
-                    VStack(alignment: .leading, spacing: 10) {
-                        Text("版本：\(release.version)")
-
-                        if let assetName = release.assetName {
-                            Text("安装包：\(assetName)")
-                                .foregroundStyle(.secondary)
-                        }
-
-                        HStack {
-                            Button(appState.isInstallingUpdate ? "安装中..." : "下载并安装更新") {
-                                Task { await appState.installLatestRelease() }
-                            }
-                            .disabled(
-                                appState.isCheckingUpdate ||
-                                appState.isInstallingUpdate ||
-                                !UpdateService.canInstall(release: release, currentVersion: appState.currentVersion)
-                            )
-
-                            Button("打开当前 Release") {
-                                UpdateService.openReleasePage(release)
-                            }
-                        }
-
-                        if !UpdateService.canInstall(release: release, currentVersion: appState.currentVersion) {
-                            Text(release.downloadURL == nil ? "这个 release 缺少可安装的 `.zip` 资产。" : "当前已是最新版本，无需重复安装。")
-                                .font(.footnote)
-                                .foregroundStyle(.secondary)
-                        }
+                .contextMenu(forSelectionType: TaskRecord.ID.self) { selectedIDs in
+                    taskContextMenuItems(for: selectedIDs)
+                } primaryAction: { selectedIDs in
+                    if let id = selectedIDs.first,
+                       let record = appState.taskRecords.first(where: { $0.id == id }) {
+                        activeSheet = .editTask(record)
                     }
                 }
             }
-
-            GroupBox("发布要求") {
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("1. 每次发版继续上传 arm64 的 `.app.zip` 到 GitHub Release。")
-                    Text("2. 版本号要递增，例如 `v0.1.0`、`v0.1.1`。")
-                    Text("3. 如果安装在 `/Applications`，更新时会请求系统授权后原位替换。")
-                }
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
         }
     }
 
-    private func summaryCard(title: String, value: String, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text(title)
-                .font(.headline)
-            Text(value)
-                .font(.system(size: 28, weight: .bold, design: .rounded))
+    @ViewBuilder
+    private func taskContextMenuItems(for selectedIDs: Set<TaskRecord.ID>) -> some View {
+        if let id = selectedIDs.first,
+           let record = appState.taskRecords.first(where: { $0.id == id }) {
+            Button("编辑") {
+                activeSheet = .editTask(record)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(16)
-        .background(color.opacity(0.12))
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        if !selectedIDs.isEmpty {
+            Divider()
+            Button("删除所选 (\(selectedIDs.count))", role: .destructive) {
+                appState.taskRecords.removeAll { selectedIDs.contains($0.id) }
+                taskSelection = []
+            }
+        }
+    }
+
+    // MARK: - Helpers
+
+    private func summaryCardButton(title: String, value: String, color: Color, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(title)
+                    .font(.headline)
+                Text(value)
+                    .font(.system(size: 28, weight: .bold, design: .rounded))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(color.opacity(0.12))
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+        .buttonStyle(.plain)
     }
 
     @MainActor
@@ -435,12 +453,205 @@ struct ContentView: View {
     }
 }
 
+// MARK: - Supporting Types
+
 private enum WorkbookKind {
-    case video
-    case tag
-    case title
-    case task
+    case video, tag, title, task
 }
+
+private enum LibraryDetailKind: String {
+    case video, tag, title, task
+}
+
+private enum ActiveSheet: Identifiable {
+    case libraryDetail(LibraryDetailKind)
+    case editTitle(TitleRecord)
+    case editTask(TaskRecord)
+
+    var id: String {
+        switch self {
+        case .libraryDetail(let kind): "detail-\(kind.rawValue)"
+        case .editTitle(let r): "editTitle-\(r.id)"
+        case .editTask(let r): "editTask-\(r.id)"
+        }
+    }
+}
+
+// MARK: - Library Detail View
+
+private struct LibraryDetailView: View {
+    let kind: LibraryDetailKind
+    @ObservedObject var appState: AppState
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(sheetTitle).font(.title2.bold())
+                Text("\(recordCount) 条").foregroundStyle(.secondary)
+                Spacer()
+                Button("关闭") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+            }
+            tableContent
+        }
+        .padding(20)
+        .frame(minWidth: 900, minHeight: 500)
+    }
+
+    private var sheetTitle: String {
+        switch kind {
+        case .video: "视频库详情"
+        case .tag: "标签库详情"
+        case .title: "标题库详情"
+        case .task: "任务单详情"
+        }
+    }
+
+    private var recordCount: Int {
+        switch kind {
+        case .video: appState.videoRecords.count
+        case .tag: appState.tagRecords.count
+        case .title: appState.titleRecords.count
+        case .task: appState.taskRecords.count
+        }
+    }
+
+    @ViewBuilder
+    private var tableContent: some View {
+        switch kind {
+        case .video:
+            Table(appState.videoRecords) {
+                TableColumn("视频文件名", value: \.videoFileName)
+                TableColumn("SKU编码", value: \.skuCode)
+                TableColumn("SKU款式", value: \.skuStyle)
+                TableColumn("使用状态", value: \.useStatus)
+                TableColumn("发布日期", value: \.publishDate)
+                TableColumn("发布时间", value: \.publishTime)
+                TableColumn("小黄车标题", value: \.yellowCartTitle)
+                TableColumn("看后搜小蓝词", value: \.blueSearchTerm)
+                TableColumn("位置信息", value: \.locationWechat)
+                TableColumn("热门款", value: \.popularFlag)
+            }
+        case .tag:
+            Table(appState.tagRecords) {
+                TableColumn("SKU编码", value: \.skuCode)
+                TableColumn("SKU款式名", value: \.skuStyleName)
+                TableColumn("标签1", value: \.tag1)
+                TableColumn("标签2", value: \.tag2)
+                TableColumn("标签3", value: \.tag3)
+                TableColumn("标签4", value: \.tag4)
+                TableColumn("标签5", value: \.tag5)
+            }
+        case .title:
+            Table(appState.titleRecords) {
+                TableColumn("标题", value: \.title)
+                TableColumn("使用状态", value: \.useStatus)
+                TableColumn("使用次数") { r in Text("\(r.useCount)") }
+                TableColumn("爆款分") { r in Text("\(r.hotScore)") }
+                TableColumn("短标题（视频号）", value: \.shortTitleWechat)
+            }
+        case .task:
+            Table(appState.taskRecords) {
+                TableColumn("任务ID", value: \.taskID)
+                TableColumn("平台", value: \.publishPlatform)
+                TableColumn("账号名称", value: \.accountName)
+                TableColumn("SKU款式名", value: \.skuStyleName)
+                TableColumn("标题", value: \.title)
+                TableColumn("短标题", value: \.shortTitleWechat)
+                TableColumn("看后搜", value: \.blueSearchTermDouyin)
+                TableColumn("定时发布时间", value: \.scheduledTime)
+                TableColumn("任务状态", value: \.taskStatus)
+            }
+        }
+    }
+}
+
+// MARK: - Title Edit Sheet
+
+private struct TitleEditSheet: View {
+    @State var draft: TitleRecord
+    let onSave: (TitleRecord) -> Void
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("编辑标题").font(.title3.bold())
+            Form {
+                TextField("标题", text: $draft.title)
+                TextField("使用状态", text: $draft.useStatus)
+                Stepper("使用次数：\(draft.useCount)", value: $draft.useCount, in: 0...9999)
+                Stepper("爆款分：\(draft.hotScore)", value: $draft.hotScore, in: 0...100)
+                TextField("短标题（视频号）", text: $draft.shortTitleWechat)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    onSave(draft)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 480)
+    }
+}
+
+// MARK: - Task Edit Sheet
+
+private struct TaskEditSheet: View {
+    @State var draft: TaskRecord
+    let onSave: (TaskRecord) -> Void
+    @Environment(\.dismiss) var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("编辑任务 \(draft.taskID)").font(.title3.bold())
+            ScrollView {
+                Form {
+                    Section("调度") {
+                        TextField("账号名称", text: $draft.accountName)
+                        TextField("定时发布时间", text: $draft.scheduledTime)
+                        TextField("任务状态", text: $draft.taskStatus)
+                    }
+                    Section("内容") {
+                        TextField("标题", text: $draft.title)
+                        TextField("短标题（视频号）", text: $draft.shortTitleWechat)
+                        TextField("标签1", text: $draft.tag1)
+                        TextField("标签2", text: $draft.tag2)
+                        TextField("标签3", text: $draft.tag3)
+                        TextField("标签4", text: $draft.tag4)
+                        TextField("标签5", text: $draft.tag5)
+                    }
+                    Section("平台字段") {
+                        TextField("小黄车标题（抖音）", text: $draft.yellowCartTitleDouyin)
+                        TextField("看后搜小蓝词（抖音）", text: $draft.blueSearchTermDouyin)
+                        TextField("位置信息", text: $draft.location)
+                        TextField("标记原创", text: $draft.markOriginal)
+                    }
+                }
+                .formStyle(.grouped)
+            }
+            HStack {
+                Spacer()
+                Button("取消") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button("保存") {
+                    onSave(draft)
+                    dismiss()
+                }
+                .keyboardShortcut(.defaultAction)
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 600)
+    }
+}
+
+// MARK: - Generation Flow View
 
 private struct GenerationFlowView: View {
     let settings: TaskGenerationSettings

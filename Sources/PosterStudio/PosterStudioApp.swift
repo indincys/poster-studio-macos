@@ -14,5 +14,11 @@ struct PosterStudioApp: App {
             #endif
         }
         .windowStyle(.titleBar)
+
+        #if arch(arm64)
+        Settings {
+            SettingsView(appState: appState)
+        }
+        #endif
     }
 }
