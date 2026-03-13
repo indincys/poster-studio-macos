@@ -67,6 +67,10 @@ enum UpdateService {
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("PosterStudio/\(installedVersion())", forHTTPHeaderField: "User-Agent")
+        let token = settings.trimmedToken
+        if !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {

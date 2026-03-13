@@ -422,6 +422,11 @@ struct UpdateSettings {
 
     var repoOwner: String = UpdateSettings.officialRepoOwner
     var repoName: String = UpdateSettings.officialRepoName
+    var githubToken: String = ""
+
+    var trimmedToken: String {
+        githubToken.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     var trimmedOwner: String {
         repoOwner.trimmingCharacters(in: .whitespacesAndNewlines)
