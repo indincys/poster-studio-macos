@@ -37,6 +37,13 @@ enum UpdateServiceError: LocalizedError {
 }
 
 enum UpdateService {
+    /// Cached ETag and response data to avoid hitting GitHub API rate limits.
+    /// Conditional requests returning 304 do not count against the limit.
+    nonisolated(unsafe) private static var cachedETag: String?
+    nonisolated(unsafe) private static var cachedResponseData: Data?
+    nonisolated(unsafe) private static var lastCheckTime: Date?
+    private static let minimumCheckInterval: TimeInterval = 300 // 5 minutes
+
     static func currentVersionDisplay(bundle: Bundle = .main) -> String {
         normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String)
             ?? normalizedVersion(bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String)
@@ -64,17 +71,32 @@ enum UpdateService {
             throw UpdateServiceError.httpError(0, "无法构建 API URL")
         }
 
+        // Cooldown: if checked recently and we have cached data, use it
+        if let lastCheck = lastCheckTime, let cached = cachedResponseData,
+           Date().timeIntervalSince(lastCheck) < minimumCheckInterval {
+            let release = try decodeRelease(from: cached)
+            return try buildResult(from: release, currentVersion: currentVersion)
+        }
+
         var request = URLRequest(url: url)
         request.setValue("application/vnd.github+json", forHTTPHeaderField: "Accept")
         request.setValue("PosterStudio/\(installedVersion())", forHTTPHeaderField: "User-Agent")
-        let token = settings.trimmedToken
-        if !token.isEmpty {
-            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        // Send cached ETag for conditional request (304 doesn't count against rate limit)
+        if let etag = cachedETag {
+            request.setValue(etag, forHTTPHeaderField: "If-None-Match")
         }
 
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let httpResponse = response as? HTTPURLResponse else {
             throw UpdateServiceError.httpError(0, "无法获取 HTTP 响应")
+        }
+
+        lastCheckTime = Date()
+
+        // 304 Not Modified — use cached data
+        if httpResponse.statusCode == 304, let cached = cachedResponseData {
+            let release = try decodeRelease(from: cached)
+            return try buildResult(from: release, currentVersion: currentVersion)
         }
 
         guard 200..<300 ~= httpResponse.statusCode else {
@@ -90,13 +112,25 @@ enum UpdateService {
             throw UpdateServiceError.httpError(httpResponse.statusCode, detail)
         }
 
-        let release: GitHubRelease
+        // Cache the ETag and response data for future conditional requests
+        if let etag = httpResponse.value(forHTTPHeaderField: "Etag") {
+            cachedETag = etag
+            cachedResponseData = data
+        }
+
+        let release = try decodeRelease(from: data)
+        return try buildResult(from: release, currentVersion: currentVersion)
+    }
+
+    private static func decodeRelease(from data: Data) throws -> GitHubRelease {
         do {
-            release = try JSONDecoder().decode(GitHubRelease.self, from: data)
+            return try JSONDecoder().decode(GitHubRelease.self, from: data)
         } catch {
             throw UpdateServiceError.decodingFailed(error.localizedDescription)
         }
+    }
 
+    private static func buildResult(from release: GitHubRelease, currentVersion: String?) throws -> UpdateCheckResult {
         guard let pageURL = URL(string: release.htmlURL) else {
             throw UpdateServiceError.decodingFailed("html_url 无效")
         }

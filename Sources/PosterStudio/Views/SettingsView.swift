@@ -15,9 +15,6 @@ struct SettingsView: View {
                     TextField("Repo Name", text: $appState.updateSettings.repoName)
                 }
 
-                SecureField("GitHub Token（可选，避免速率限制）", text: $appState.updateSettings.githubToken)
-                    .textFieldStyle(.roundedBorder)
-
                 HStack {
                     Button(appState.isCheckingUpdate ? "检查中..." : "检查更新") {
                         Task { await appState.checkForUpdate() }
